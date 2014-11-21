@@ -5,10 +5,15 @@ SRC = device.c presentation_queue.c surface_output.c surface_video.c \
 	surface_bitmap.c video_mixer.c decoder.c handles.c ve.c \
 	h264.c mpeg12.c mp4.c rgba.c tiled_yuv.S
 
+GLIBINCLUDES ?= $(shell export PKG_CONFIG_PATH=${TOOLCHAIN}/pkgconfig; pkg-config --cflags glib-2.0)
+GLIBLIBS ?= $(shell export PKG_CONFIG_PATH=${TOOLCHAIN}/pkgconfig; pkg-config --libs glib-2.0)
+
 CFLAGS ?= -Wall -O3
 LDFLAGS ?=
-LIBS ?= -lrt -lm -lX11
+LIBS ?= -lrt -lm -lX11 $(GLIBLIBS)
 CC ?= gcc
+
+INCLUDES += $(GLIBINCLUDES)
 
 MAKEFLAGS += -rR --no-print-directory
 
@@ -19,7 +24,7 @@ LIB_LDFLAGS ?= -shared -Wl,-soname,$(TARGET)
 OBJ = $(addsuffix .o,$(basename $(SRC)))
 DEP = $(addsuffix .d,$(basename $(SRC)))
 
-MODULEDIR = $(shell pkg-config --variable=moduledir vdpau)
+MODULEDIR = $(shell export PKG_CONFIG_PATH=${TOOLCHAIN}/pkgconfig; pkg-config --variable=moduledir vdpau)
 
 ifeq ($(MODULEDIR),)
 MODULEDIR=/usr/lib/vdpau
@@ -43,7 +48,7 @@ uninstall:
 	rm -f $(DESTDIR)$(MODULEDIR)/$(TARGET)
 
 %.o: %.c
-	$(CC) $(DEP_CFLAGS) $(LIB_CFLAGS) $(CFLAGS) -c $< -o $@
+	$(CC) $(INCLUDES) $(DEP_CFLAGS) $(LIB_CFLAGS) $(CFLAGS) -c $< -o $@
 
 %.o: %.S
 	$(CC) -c $< -o $@

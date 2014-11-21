@@ -82,6 +82,7 @@ typedef struct
 {
 	queue_target_ctx_t *target;
 	VdpColor background;
+	pthread_mutex_t mutex;
 	device_ctx_t *device;
 } queue_ctx_t;
 
@@ -120,6 +121,8 @@ typedef struct
 	float contrast;
 	float saturation;
 	float hue;
+	VdpTime first_presentation_time;
+	VdpPresentationQueueStatus status;
 } output_surface_ctx_t;
 
 typedef struct
