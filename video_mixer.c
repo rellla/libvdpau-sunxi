@@ -110,6 +110,12 @@ VdpStatus vdp_video_mixer_render(VdpVideoMixer mixer,
 
 	os->yuv = yuv_ref(os->vs->yuv);
 
+	if (mix->device->deint_enabled)
+	{
+		os->video_deinterlace = mix->deinterlace;
+		os->video_field = current_picture_structure;
+	}
+
 	if (destination_video_rect)
 	{
 		os->video_dst_rect = *destination_video_rect;
@@ -173,6 +179,19 @@ VdpStatus vdp_video_mixer_set_feature_enables(VdpVideoMixer mixer,
 	if (!mix)
 		return VDP_STATUS_INVALID_HANDLE;
 
+	if (mix->device->deint_enabled)
+	{
+		int i;
+		for (i = 0; i < feature_count; i++)
+		{
+			switch (features[i])
+			{
+				case VDP_VIDEO_MIXER_FEATURE_DEINTERLACE_TEMPORAL:
+					mix->deinterlace = feature_enables[i];
+					break;
+			}
+		}
+	}
 
 	return VDP_STATUS_OK;
 }
