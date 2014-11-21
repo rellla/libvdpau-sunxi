@@ -44,6 +44,17 @@ VdpStatus vdp_imp_device_create_x11(Display *display,
 		return VDP_STATUS_ERROR;
 	}
 
+	char *env_vdpau_deint = getenv("VDPAU_DEINT");
+	if (env_vdpau_deint && strncmp(env_vdpau_deint, "1", 1) == 0)
+	{
+		dev->deint_enabled = 1;
+		VDPAU_DBG("Deinterlacer enabled.");
+	}
+	else
+	{
+		VDPAU_DBG("Deinterlacer disabled.");
+	}
+
 	char *env_vdpau_osd = getenv("VDPAU_OSD");
 	if (env_vdpau_osd && strncmp(env_vdpau_osd, "1", 1) == 0)
 	{
@@ -276,4 +287,3 @@ VdpStatus vdp_get_information_string(char const **information_string)
 	*information_string = "sunxi VDPAU Driver";
 	return VDP_STATUS_OK;
 }
-
