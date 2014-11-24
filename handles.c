@@ -19,6 +19,7 @@
 
 #include <string.h>
 #include "vdpau_private.h"
+#include <pthread.h>
 
 #define INITIAL_SIZE 16
 
@@ -26,7 +27,10 @@ static struct
 {
 	void **data;
 	int size;
+	pthread_mutex_t mutex;
 } ht;
+
+pthread_mutex_t handle_table_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 int handle_create(void *data)
 {
@@ -34,6 +38,8 @@ int handle_create(void *data)
 
 	if (!data)
 		return -1;
+		
+	pthread_mutex_lock(&handle_table_mutex);
 
 	for (index = 0; index < ht.size; index++)
 		if (ht.data[index] == NULL)
@@ -43,8 +49,10 @@ int handle_create(void *data)
 	{
 		int new_size = ht.size ? ht.size * 2 : INITIAL_SIZE;
 		void **new_data = realloc(ht.data, new_size * sizeof(void *));
-		if (!new_data)
+		if (!new_data) {
+			pthread_mutex_unlock(&handle_table_mutex);
 			return -1;
+		}
 
 		memset(new_data + ht.size, 0, (new_size - ht.size) * sizeof(void *));
 		ht.data = new_data;
@@ -52,6 +60,10 @@ int handle_create(void *data)
 	}
 
 	ht.data[index] = data;
+	pthread_mutex_init(&ht.mutex, NULL);
+	
+	pthread_mutex_unlock(&handle_table_mutex);
+	
 	return index + 1;
 }
 
@@ -61,8 +73,16 @@ void *handle_get(int handle)
 		return NULL;
 
 	int index = handle - 1;
-	if (index < ht.size)
-		return ht.data[index];
+	
+	pthread_mutex_lock(&handle_table_mutex);
+	
+	if (index < ht.size) {
+		void *ret = ht.data[index];
+		pthread_mutex_unlock(&handle_table_mutex);
+		return ret;
+	}
+	
+	pthread_mutex_unlock(&handle_table_mutex);
 
 	return NULL;
 }
@@ -71,6 +91,28 @@ void handle_destroy(int handle)
 {
 	int index = handle - 1;
 
+	pthread_mutex_lock(&handle_table_mutex);
+	
 	if (index < ht.size)
 		ht.data[index] = NULL;
+		
+	pthread_mutex_unlock(&handle_table_mutex);
+}
+
+void handle_acquire(int handle) {
+	if (handle == VDP_INVALID_HANDLE)
+		return;
+
+	int index = handle - 1;
+	if (index < ht.size)
+		pthread_mutex_lock(&ht.mutex);
+}
+
+void handle_release(int handle) {
+	if (handle == VDP_INVALID_HANDLE)
+		return;
+
+	int index = handle - 1;
+	if (index < ht.size)
+		pthread_mutex_unlock(&ht.mutex);
 }
