@@ -68,6 +68,15 @@ VdpStatus vdp_imp_device_create_x11(Display *display,
 		VDPAU_DBG("VSync enabled.");
 	}
 
+	char *env_vdpau_deint = getenv("VDPAU_DEINT");
+	if (env_vdpau_deint && strncmp(env_vdpau_deint, "1", 1) == 0)
+	{
+		dev->deint_enabled = 1;
+		VDPAU_DBG("Deinterlacer enabled.");
+	}
+	else
+		VDPAU_DBG("Deinterlacer disabled.");
+
 	*get_proc_address = &vdp_get_proc_address;
 
 	return VDP_STATUS_OK;

@@ -27,11 +27,7 @@
 #include <string.h>
 #include <sys/ioctl.h>
 
-#ifdef INTERNAL_QUEUE
 #include "queue.h"
-#else
-#include <glib.h>
-#endif
 
 #include "sunxi_disp_ioctl.h"
 #include "ve.h"
@@ -39,11 +35,7 @@
 
 static pthread_t presentation_thread_id;
 
-#ifdef INTERNAL_QUEUE
 static QUEUE *queue;
-#else
-static GAsyncQueue *async_q;
-#endif
 
 static VdpTime frame_time;
 
@@ -91,11 +83,7 @@ VdpStatus vdp_presentation_queue_display(VdpPresentationQueue presentation_queue
 	if (!os)
 		return VDP_STATUS_INVALID_HANDLE;
 
-#ifdef INTERNAL_QUEUE
 	task_t *task = (task_t *)calloc(1, sizeof(task_t));
-#else
-	task_t *task = g_slice_new0(task_t);
-#endif
 	task->when = vdptime2timespec(earliest_presentation_time);
 	task->clip_width = clip_width;
 	task->clip_height = clip_height;
@@ -106,19 +94,13 @@ VdpStatus vdp_presentation_queue_display(VdpPresentationQueue presentation_queue
 	os->first_presentation_time = 0;
 	os->status = VDP_PRESENTATION_QUEUE_STATUS_QUEUED;
 
-#ifdef INTERNAL_QUEUE
 	if(q_push_tail(queue, task))
 	{
 		VDPAU_DBG("ERROR: Queue insert of task %d", task->id);
 		free(task);
 	}
-/*
-	else
-		VDPAU_DBG("SUCCESS: Queue insert of task %d", task->id);
-*/
-#else
-	g_async_queue_push(async_q, task);
-#endif
+//	else
+//		VDPAU_DBG("SUCCESS: Queue insert of task %d", task->id);
 
 	return VDP_STATUS_OK;
 }
@@ -142,69 +124,137 @@ static VdpStatus do_presentation_queue_display(task_t *task)
 // Todo: XEventLoop
 //	XClearWindow(q->device->display, q->target->drawable);
 
-
 	if (os->vs)
 	{
-		// VIDEO layer
-		__disp_layer_info_t layer_info;
-		memset(&layer_info, 0, sizeof(layer_info));
-		layer_info.pipe = q->device->osd_enabled ? 0 : 1;
-		layer_info.mode = DISP_LAYER_WORK_MODE_SCALER;
-		layer_info.fb.format = DISP_FORMAT_YUV420;
-		layer_info.fb.seq = DISP_SEQ_UVUV;
-		switch (os->vs->source_format) {
-		case VDP_YCBCR_FORMAT_YUYV:
-			layer_info.fb.mode = DISP_MOD_INTERLEAVED;
-			layer_info.fb.format = DISP_FORMAT_YUV422;
-			layer_info.fb.seq = DISP_SEQ_YUYV;
-			break;
-		case VDP_YCBCR_FORMAT_UYVY:
-			layer_info.fb.mode = DISP_MOD_INTERLEAVED;
-			layer_info.fb.format = DISP_FORMAT_YUV422;
-			layer_info.fb.seq = DISP_SEQ_UYVY;
-			break;
-		case VDP_YCBCR_FORMAT_NV12:
-			layer_info.fb.mode = DISP_MOD_NON_MB_UV_COMBINED;
-			break;
-		case VDP_YCBCR_FORMAT_YV12:
-			layer_info.fb.mode = DISP_MOD_NON_MB_PLANAR;
-			break;
-		default:
-		case INTERNAL_YCBCR_FORMAT:
-			layer_info.fb.mode = DISP_MOD_MB_UV_COMBINED;
-			break;
-		}
-		layer_info.fb.br_swap = 0;
-		layer_info.fb.addr[0] = ve_virt2phys(os->yuv->data) + 0x40000000;
-		layer_info.fb.addr[1] = ve_virt2phys(os->yuv->data + os->vs->luma_size) + 0x40000000;
-		layer_info.fb.addr[2] = ve_virt2phys(os->yuv->data + os->vs->luma_size + os->vs->luma_size / 4) + 0x40000000;
+		static int last_id = -1;
 
-		layer_info.fb.cs_mode = DISP_BT601;
-		layer_info.fb.size.width = os->vs->width;
-		layer_info.fb.size.height = os->vs->height;
-		layer_info.src_win.x = os->video_src_rect.x0;
-		layer_info.src_win.y = os->video_src_rect.y0;
-		layer_info.src_win.width = os->video_src_rect.x1 - os->video_src_rect.x0;
-		layer_info.src_win.height = os->video_src_rect.y1 - os->video_src_rect.y0;
-		layer_info.scn_win.x = x + os->video_dst_rect.x0;
-		layer_info.scn_win.y = y + os->video_dst_rect.y0;
-		layer_info.scn_win.width = os->video_dst_rect.x1 - os->video_dst_rect.x0;
-		layer_info.scn_win.height = os->video_dst_rect.y1 - os->video_dst_rect.y0;
-		layer_info.ck_enable = q->device->osd_enabled ? 0 : 1;
+		uint32_t args[4] = { 0, q->target->layer, 0, 0 };
 
-		if (layer_info.scn_win.y < 0)
+//		VDPAU_DBG("Action, task = %d, start_flag: %d, last_id: %d\n", task->id, os->start_flag, last_id);
+
+		if (os->start_flag == 1)
 		{
-			int cutoff = -(layer_info.scn_win.y);
-			layer_info.src_win.y += cutoff;
-			layer_info.src_win.height -= cutoff;
-			layer_info.scn_win.y = 0;
-			layer_info.scn_win.height -= cutoff;
+			// VIDEO layer
+			__disp_layer_info_t layer_info;
+			memset(&layer_info, 0, sizeof(layer_info));
+
+			args[2] = (unsigned long)(&layer_info);
+			ioctl(q->target->fd, DISP_CMD_LAYER_GET_PARA, args);
+
+			layer_info.pipe = q->device->osd_enabled ? 0 : 1;
+			layer_info.mode = DISP_LAYER_WORK_MODE_SCALER;
+			layer_info.fb.format = DISP_FORMAT_YUV420;
+			layer_info.fb.seq = DISP_SEQ_UVUV;
+			switch (os->vs->source_format) {
+			case VDP_YCBCR_FORMAT_YUYV:
+				layer_info.fb.mode = DISP_MOD_INTERLEAVED;
+				layer_info.fb.format = DISP_FORMAT_YUV422;
+				layer_info.fb.seq = DISP_SEQ_YUYV;
+				break;
+			case VDP_YCBCR_FORMAT_UYVY:
+				layer_info.fb.mode = DISP_MOD_INTERLEAVED;
+				layer_info.fb.format = DISP_FORMAT_YUV422;
+				layer_info.fb.seq = DISP_SEQ_UYVY;
+				break;
+			case VDP_YCBCR_FORMAT_NV12:
+				layer_info.fb.mode = DISP_MOD_NON_MB_UV_COMBINED;
+				break;
+			case VDP_YCBCR_FORMAT_YV12:
+				layer_info.fb.mode = DISP_MOD_NON_MB_PLANAR;
+				break;
+			default:
+			case INTERNAL_YCBCR_FORMAT:
+				layer_info.fb.mode = DISP_MOD_MB_UV_COMBINED;
+				break;
+			}
+
+			layer_info.fb.br_swap = 0;
+			if (os->vs->height < 720)
+				layer_info.fb.cs_mode = DISP_BT601;
+			else
+				layer_info.fb.cs_mode = DISP_BT709;
+			layer_info.fb.size.width = os->vs->width;
+			layer_info.fb.size.height = os->vs->height;
+			layer_info.src_win.x = os->video_src_rect.x0;
+			layer_info.src_win.y = os->video_src_rect.y0;
+			layer_info.src_win.width = os->video_src_rect.x1 - os->video_src_rect.x0;
+			layer_info.src_win.height = os->video_src_rect.y1 - os->video_src_rect.y0;
+			layer_info.scn_win.x = x + os->video_dst_rect.x0;
+			layer_info.scn_win.y = y + os->video_dst_rect.y0;
+			layer_info.scn_win.width = os->video_dst_rect.x1 - os->video_dst_rect.x0;
+			layer_info.scn_win.height = os->video_dst_rect.y1 - os->video_dst_rect.y0;
+			layer_info.ck_enable = q->device->osd_enabled ? 0 : 1;
+
+			if (layer_info.scn_win.y < 0)
+			{
+				int cutoff = -(layer_info.scn_win.y);
+				layer_info.src_win.y += cutoff;
+				layer_info.src_win.height -= cutoff;
+				layer_info.scn_win.y = 0;
+				layer_info.scn_win.height -= cutoff;
+			}
+
+			layer_info.fb.addr[0] = 0;
+			layer_info.fb.addr[1] = 0;
+			layer_info.fb.addr[2] = 0;
+
+			args[2] = (unsigned long)(&layer_info);
+			ioctl(q->target->fd, DISP_CMD_LAYER_SET_PARA, args);
+
+			layer_info.fb.addr[0] = ve_virt2phys(os->yuv->data) + 0x40000000;
+			layer_info.fb.addr[1] = ve_virt2phys(os->yuv->data + os->vs->luma_size) + 0x40000000;
+			layer_info.fb.addr[2] = ve_virt2phys(os->yuv->data + os->vs->luma_size + os->vs->luma_size / 4) + 0x40000000;
+
+			args[2] = (unsigned long)(&layer_info);
+			ioctl(q->target->fd, DISP_CMD_LAYER_SET_PARA, args);
+
+			args[2] = 0;
+			ioctl(q->target->fd, DISP_CMD_LAYER_OPEN, args);
+			ioctl(q->target->fd, DISP_CMD_VIDEO_START, args);
+//			VDPAU_DBG("Finish first run, task = %d", task->id);
+
+			os->start_flag = 0; // initial run is done, only set video.addr[] in the next run
+		}
+		else
+		{
+			__disp_video_fb_t video;
+			memset(&video, 0, sizeof(__disp_video_fb_t));
+			video.id = last_id + 1;
+			video.addr[0] = ve_virt2phys(os->yuv->data) + 0x40000000;
+			video.addr[1] = ve_virt2phys(os->yuv->data + os->vs->luma_size) + 0x40000000;
+			video.addr[2] = ve_virt2phys(os->yuv->data + os->vs->luma_size + os->vs->luma_size / 4) + 0x40000000;
+
+			if (q->device->deint_enabled)
+			{
+#ifdef FORCE_DEINT
+				video.interlace = 1;
+#else
+				video.interlace = os->video_deinterlace;
+#endif
+				video.top_field_first = os->video_field ? 0 : 1;
+			}
+
+			args[2] = (unsigned long)(&video);
+			int tmp, i = 0;
+			while ((tmp = ioctl(q->target->fd, DISP_CMD_VIDEO_GET_FRAME_ID, args)) != last_id)
+			{
+				VDPAU_DBG("Waiting for frame id ... tmp=%d, last_id=%d", tmp, last_id);
+				if (tmp = -1)
+					break;
+
+				usleep(1000);
+				if (i++ > 10)
+				{
+					VDPAU_DBG("Waiting for frame id failed");
+					break;
+				}
+			}
+
+			ioctl(q->target->fd, DISP_CMD_VIDEO_SET_FB, args);
+//			VDPAU_DBG("Finish standard run, task = %d, last_id: %d", task->id, last_id);
+			last_id++;
 		}
 
-		uint32_t args[4] = { 0, q->target->layer, (unsigned long)(&layer_info), 0 };
-		ioctl(q->target->fd, DISP_CMD_LAYER_SET_PARA, args);
-
-		ioctl(q->target->fd, DISP_CMD_LAYER_OPEN, args);
 		// Note: might be more reliable (but slower and problematic when there
 		// are driver issues and the GET functions return wrong values) to query the
 		// old values instead of relying on our internal csc_change.
@@ -289,11 +339,7 @@ out_osd:
 	os->first_presentation_time = frame_time;
 	os->status = VDP_PRESENTATION_QUEUE_STATUS_IDLE;
 
-#ifdef INTERNAL_QUEUE
 	free(task);
-#else
-	g_slice_free(task_t, task);
-#endif
 
 	return VDP_STATUS_OK;
 }
@@ -315,15 +361,9 @@ static void *presentation_thread(void *param)
 		int64_t timeout;
 		struct timespec now;
 
-#ifdef INTERNAL_QUEUE
 //		VDPAU_DBG("INWHILE Queue: %d", q_length(queue));
 		if(!q_isEmpty(queue))
 		{
-#else
-		gint queue_length = g_async_queue_length(async_q);
-//		VDPAU_DBG("INWHILE Queue: %d", queue_length);
-		if (queue_length > 0) {
-#endif
 			/* This piece of code does not harmony with VSync
 			do {
 				// timeout is the difference between now and scheduled time
@@ -339,7 +379,6 @@ static void *presentation_thread(void *param)
 					VDPAU_DBG("VSync failed");
 			}
 			frame_time = get_time();
-#ifdef INTERNAL_QUEUE
 			// remove it from queue and free the task
 			task_t *task;
 			if (q_pop_head(queue, (void *)&task))
@@ -350,14 +389,6 @@ static void *presentation_thread(void *param)
 				// run the task
 				do_presentation_queue_display(task);
 			}
-#else
-			// remove it from queue and free the task
-			task_t *task = g_async_queue_pop(async_q);
-
-			// run the task
-//			VDPAU_DBG("In thread, displaying task: %d", task->id);
-			do_presentation_queue_display(task);
-#endif
 		}
 	}
 
@@ -452,6 +483,7 @@ VdpStatus vdp_presentation_queue_target_destroy(VdpPresentationQueueTarget prese
 
 	uint32_t args[4] = { 0, qt->layer, 0, 0 };
 
+	ioctl(qt->fd, DISP_CMD_VIDEO_STOP, args);
 	ioctl(qt->fd, DISP_CMD_LAYER_CLOSE, args);
 	ioctl(qt->fd, DISP_CMD_LAYER_RELEASE, args);
 
@@ -492,13 +524,8 @@ VdpStatus vdp_presentation_queue_create(VdpDevice device,
 	q->device = dev;
 
 	// initialize queue and launch worker thread
-#ifdef INTERNAL_QUEUE
 	if (!queue) {
 		queue = q_queue_init();
-#else
-	if (!async_q) {
-		async_q = g_async_queue_new();
-#endif
 		pthread_create(&presentation_thread_id, NULL, presentation_thread, q);
 	}
 
@@ -511,9 +538,7 @@ VdpStatus vdp_presentation_queue_destroy(VdpPresentationQueue presentation_queue
 	if (!q)
 		return VDP_STATUS_INVALID_HANDLE;
 
-#ifdef INTERNAL_QUEUE
 	q_queue_free(queue);
-#endif
 	handle_destroy(presentation_queue);
 
 	return VDP_STATUS_OK;
