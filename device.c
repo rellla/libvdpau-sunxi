@@ -44,14 +44,28 @@ VdpStatus vdp_imp_device_create_x11(Display *display,
 		return VDP_STATUS_ERROR;
 	}
 
-	char *env_vdpau_osd = getenv("VDPAU_OSD");
+	char *env_vdpau_osd = getenv("VDPAU_NOOSD");
 	if (env_vdpau_osd && strncmp(env_vdpau_osd, "1", 1) == 0)
+		VDPAU_DBG("OSD disabled.");
+	else
 	{
 		dev->g2d_fd = open("/dev/g2d", O_RDWR);
 		if (dev->g2d_fd != -1)
+		{
 			dev->osd_enabled = 1;
+			VDPAU_DBG("OSD enabled.");
+		}
 		else
 			VDPAU_DBG("Failed to open /dev/g2d! OSD disabled.");
+	}
+
+	char *env_vdpau_vsync = getenv("VDPAU_NOVSYNC");
+	if (env_vdpau_vsync && strncmp(env_vdpau_vsync, "1", 1) == 0)
+		VDPAU_DBG("VSync disabled.");
+	else
+	{
+		dev->vsync_enabled = 1;
+		VDPAU_DBG("VSync enabled.");
 	}
 
 	*get_proc_address = &vdp_get_proc_address;
@@ -264,4 +278,3 @@ VdpStatus vdp_get_information_string(char const **information_string)
 	*information_string = "sunxi VDPAU Driver";
 	return VDP_STATUS_OK;
 }
-

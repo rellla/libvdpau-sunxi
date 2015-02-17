@@ -4,13 +4,28 @@ Most features of full VDPAU are missing, only decoding of h264, mpeg1 and
 mpeg2 and output of software-decoded videos will work.
 Output bypasses X video driver, hence don't try to use Xv
 at the same time.
-Only tested with mplayer, if other players need unimplemented functions
+Only tested with mplayer and mpv if other players need unimplemented functions
 something will fail.
+
+To use the external glib.h queue routines, edit vdpau_private.h and comment
+
+// #define INTERNAL_QUEUE
+
+make sure to have the glib.h library dependency available on your system,
+then just build it:
 
    $ make
    $ make install
 
    $ export VDPAU_DRIVER=sunxi
+
+To disable OSD support for e.g. subtitles, set VDPAU_NOOSD environment
+variable to 1 (OSD enabled by default):
+   $ export VDPAU_NOOSD=1
+
+To disable VSYNC support, set VDPAU_NOVSYNC environment
+variable to 1 (Vsync enabled by default):
+   $ export VDPAU_NOVSYNC=1
 
 and then for mplayer:
    $ mplayer -vo vdpau -vc ffmpeg12vdpau,ffh264vdpau, [filename]
@@ -18,11 +33,6 @@ or for mpv:
    $ mpv --vo=vdpau --hwdec=vdpau --hwdec-codecs=all [filename]
 
 Note: Make sure that you have write access to both /dev/disp and /dev/cedar_dev
-
-To enable OSD support for e.g. subtitles, set VDPAU_OSD environment
-variable to 1:
-   $ export VDPAU_OSD=1
-
 This partly breaks X11 integration due to hardware limitations. The video
 area can't be overlapped by other windows. For fullscreen use this is no
 problem.

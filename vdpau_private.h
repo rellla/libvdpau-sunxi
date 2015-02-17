@@ -24,6 +24,8 @@
 #define MAX_HANDLES 64
 #define VBV_SIZE (1 * 1024 * 1024)
 
+#define INTERNAL_QUEUE     /* use internal queue */
+
 #include <stdlib.h>
 #include <vdpau/vdpau.h>
 #include <X11/Xlib.h>
@@ -39,6 +41,7 @@ typedef struct
 	int fd;
 	int g2d_fd;
 	int osd_enabled;
+	int vsync_enabled;
 } device_ctx_t;
 
 typedef struct
@@ -82,6 +85,7 @@ typedef struct
 {
 	queue_target_ctx_t *target;
 	VdpColor background;
+	pthread_mutex_t mutex;
 	device_ctx_t *device;
 } queue_ctx_t;
 
@@ -120,6 +124,8 @@ typedef struct
 	float contrast;
 	float saturation;
 	float hue;
+	VdpTime first_presentation_time;
+	VdpPresentationQueueStatus status;
 } output_surface_ctx_t;
 
 typedef struct
