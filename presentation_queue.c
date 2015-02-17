@@ -37,6 +37,172 @@ static uint64_t get_time(void)
 	return (uint64_t)tp.tv_sec * 1000000000ULL + (uint64_t)tp.tv_nsec;
 }
 
+VdpStatus vdp_presentation_queue_display(VdpPresentationQueue presentation_queue,
+                                         VdpOutputSurface surface,
+                                         uint32_t clip_width,
+                                         uint32_t clip_height,
+                                         VdpTime earliest_presentation_time)
+{
+	queue_ctx_t *q = handle_get(presentation_queue);
+	if (!q)
+		return VDP_STATUS_INVALID_HANDLE;
+
+	output_surface_ctx_t *os = handle_get(surface);
+	if (!os)
+		return VDP_STATUS_INVALID_HANDLE;
+
+	if (earliest_presentation_time != 0)
+		VDPAU_DBG_ONCE("Presentation time not supported");
+
+	Window c;
+	int x,y;
+	XTranslateCoordinates(q->device->display, q->target->drawable, RootWindow(q->device->display, q->device->screen), 0, 0, &x, &y, &c);
+	XClearWindow(q->device->display, q->target->drawable);
+
+	if (os->vs)
+	{
+		// VIDEO layer
+		__disp_layer_info_t layer_info;
+		memset(&layer_info, 0, sizeof(layer_info));
+		layer_info.pipe = q->device->osd_enabled ? 0 : 1;
+		layer_info.mode = DISP_LAYER_WORK_MODE_SCALER;
+		layer_info.fb.format = DISP_FORMAT_YUV420;
+		layer_info.fb.seq = DISP_SEQ_UVUV;
+		switch (os->vs->source_format) {
+		case VDP_YCBCR_FORMAT_YUYV:
+			layer_info.fb.mode = DISP_MOD_INTERLEAVED;
+			layer_info.fb.format = DISP_FORMAT_YUV422;
+			layer_info.fb.seq = DISP_SEQ_YUYV;
+			break;
+		case VDP_YCBCR_FORMAT_UYVY:
+			layer_info.fb.mode = DISP_MOD_INTERLEAVED;
+			layer_info.fb.format = DISP_FORMAT_YUV422;
+			layer_info.fb.seq = DISP_SEQ_UYVY;
+			break;
+		case VDP_YCBCR_FORMAT_NV12:
+			layer_info.fb.mode = DISP_MOD_NON_MB_UV_COMBINED;
+			break;
+		case VDP_YCBCR_FORMAT_YV12:
+			layer_info.fb.mode = DISP_MOD_NON_MB_PLANAR;
+			break;
+		default:
+		case INTERNAL_YCBCR_FORMAT:
+			layer_info.fb.mode = DISP_MOD_MB_UV_COMBINED;
+			break;
+		}
+		layer_info.fb.br_swap = 0;
+		layer_info.fb.addr[0] = ve_virt2phys(os->yuv->data) + 0x40000000;
+		layer_info.fb.addr[1] = ve_virt2phys(os->yuv->data + os->vs->luma_size) + 0x40000000;
+		layer_info.fb.addr[2] = ve_virt2phys(os->yuv->data + os->vs->luma_size + os->vs->luma_size / 4) + 0x40000000;
+
+		layer_info.fb.cs_mode = DISP_BT601;
+		layer_info.fb.size.width = os->vs->width;
+		layer_info.fb.size.height = os->vs->height;
+		layer_info.src_win.x = os->video_src_rect.x0;
+		layer_info.src_win.y = os->video_src_rect.y0;
+		layer_info.src_win.width = os->video_src_rect.x1 - os->video_src_rect.x0;
+		layer_info.src_win.height = os->video_src_rect.y1 - os->video_src_rect.y0;
+		layer_info.scn_win.x = x + os->video_dst_rect.x0;
+		layer_info.scn_win.y = y + os->video_dst_rect.y0;
+		layer_info.scn_win.width = os->video_dst_rect.x1 - os->video_dst_rect.x0;
+		layer_info.scn_win.height = os->video_dst_rect.y1 - os->video_dst_rect.y0;
+		layer_info.ck_enable = q->device->osd_enabled ? 0 : 1;
+
+		if (layer_info.scn_win.y < 0)
+		{
+			int cutoff = -(layer_info.scn_win.y);
+			layer_info.src_win.y += cutoff;
+			layer_info.src_win.height -= cutoff;
+			layer_info.scn_win.y = 0;
+			layer_info.scn_win.height -= cutoff;
+		}
+
+		uint32_t args[4] = { 0, q->target->layer, (unsigned long)(&layer_info), 0 };
+		ioctl(q->target->fd, DISP_CMD_LAYER_SET_PARA, args);
+
+		ioctl(q->target->fd, DISP_CMD_LAYER_OPEN, args);
+		// Note: might be more reliable (but slower and problematic when there
+		// are driver issues and the GET functions return wrong values) to query the
+		// old values instead of relying on our internal csc_change.
+		// Since the driver calculates a matrix out of these values after each
+		// set doing this unconditionally is costly.
+		if (os->csc_change) {
+			ioctl(q->target->fd, DISP_CMD_LAYER_ENHANCE_OFF, args);
+			args[2] = 0xff * os->brightness + 0x20;
+			ioctl(q->target->fd, DISP_CMD_LAYER_SET_BRIGHT, args);
+			args[2] = 0x20 * os->contrast;
+			ioctl(q->target->fd, DISP_CMD_LAYER_SET_CONTRAST, args);
+			args[2] = 0x20 * os->saturation;
+			ioctl(q->target->fd, DISP_CMD_LAYER_SET_SATURATION, args);
+			// hue scale is randomly chosen, no idea how it maps exactly
+			args[2] = (32 / 3.14) * os->hue + 0x20;
+			ioctl(q->target->fd, DISP_CMD_LAYER_SET_HUE, args);
+			ioctl(q->target->fd, DISP_CMD_LAYER_ENHANCE_ON, args);
+			os->csc_change = 0;
+		}
+	}
+	else
+	{
+		uint32_t args[4] = { 0, q->target->layer, 0, 0 };
+		ioctl(q->target->fd, DISP_CMD_LAYER_CLOSE, args);
+	}
+
+	if (!q->device->osd_enabled)
+		return VDP_STATUS_OK;
+
+	if (os->rgba.flags & RGBA_FLAG_NEEDS_CLEAR)
+		rgba_clear(&os->rgba);
+
+	if (os->rgba.flags & RGBA_FLAG_DIRTY)
+	{
+		// TOP layer
+		rgba_flush(&os->rgba);
+
+		__disp_layer_info_t layer_info;
+		memset(&layer_info, 0, sizeof(layer_info));
+		layer_info.pipe = 1;
+		layer_info.mode = DISP_LAYER_WORK_MODE_NORMAL;
+		layer_info.fb.mode = DISP_MOD_INTERLEAVED;
+		layer_info.fb.format = DISP_FORMAT_ARGB8888;
+		layer_info.fb.seq = DISP_SEQ_ARGB;
+		switch (os->rgba.format)
+		{
+		case VDP_RGBA_FORMAT_R8G8B8A8:
+			layer_info.fb.br_swap = 1;
+			break;
+		case VDP_RGBA_FORMAT_B8G8R8A8:
+		default:
+			layer_info.fb.br_swap = 0;
+			break;
+		}
+		layer_info.fb.addr[0] = ve_virt2phys(os->rgba.data) + 0x40000000;
+		layer_info.fb.cs_mode = DISP_BT601;
+		layer_info.fb.size.width = os->rgba.width;
+		layer_info.fb.size.height = os->rgba.height;
+		layer_info.src_win.x = os->rgba.dirty.x0;
+		layer_info.src_win.y = os->rgba.dirty.y0;
+		layer_info.src_win.width = os->rgba.dirty.x1 - os->rgba.dirty.x0;
+		layer_info.src_win.height = os->rgba.dirty.y1 - os->rgba.dirty.y0;
+		layer_info.scn_win.x = x + os->rgba.dirty.x0;
+		layer_info.scn_win.y = y + os->rgba.dirty.y0;
+		layer_info.scn_win.width = min_nz(clip_width, os->rgba.dirty.x1) - os->rgba.dirty.x0;
+		layer_info.scn_win.height = min_nz(clip_height, os->rgba.dirty.y1) - os->rgba.dirty.y0;
+
+		uint32_t args[4] = { 0, q->target->layer_top, (unsigned long)(&layer_info), 0 };
+		ioctl(q->target->fd, DISP_CMD_LAYER_SET_PARA, args);
+
+		ioctl(q->target->fd, DISP_CMD_LAYER_OPEN, args);
+	}
+	else
+	{
+		uint32_t args[4] = { 0, q->target->layer_top, 0, 0 };
+		ioctl(q->target->fd, DISP_CMD_LAYER_CLOSE, args);
+	}
+
+	return VDP_STATUS_OK;
+}
+
+
 VdpStatus vdp_presentation_queue_target_create_x11(VdpDevice device,
                                                    Drawable drawable,
                                                    VdpPresentationQueueTarget *target)
@@ -219,171 +385,6 @@ VdpStatus vdp_presentation_queue_get_time(VdpPresentationQueue presentation_queu
 		return VDP_STATUS_INVALID_HANDLE;
 
 	*current_time = get_time();
-	return VDP_STATUS_OK;
-}
-
-VdpStatus vdp_presentation_queue_display(VdpPresentationQueue presentation_queue,
-                                         VdpOutputSurface surface,
-                                         uint32_t clip_width,
-                                         uint32_t clip_height,
-                                         VdpTime earliest_presentation_time)
-{
-	queue_ctx_t *q = handle_get(presentation_queue);
-	if (!q)
-		return VDP_STATUS_INVALID_HANDLE;
-
-	output_surface_ctx_t *os = handle_get(surface);
-	if (!os)
-		return VDP_STATUS_INVALID_HANDLE;
-
-	if (earliest_presentation_time != 0)
-		VDPAU_DBG_ONCE("Presentation time not supported");
-
-	Window c;
-	int x,y;
-	XTranslateCoordinates(q->device->display, q->target->drawable, RootWindow(q->device->display, q->device->screen), 0, 0, &x, &y, &c);
-	XClearWindow(q->device->display, q->target->drawable);
-
-	if (os->vs)
-	{
-		// VIDEO layer
-		__disp_layer_info_t layer_info;
-		memset(&layer_info, 0, sizeof(layer_info));
-		layer_info.pipe = q->device->osd_enabled ? 0 : 1;
-		layer_info.mode = DISP_LAYER_WORK_MODE_SCALER;
-		layer_info.fb.format = DISP_FORMAT_YUV420;
-		layer_info.fb.seq = DISP_SEQ_UVUV;
-		switch (os->vs->source_format) {
-		case VDP_YCBCR_FORMAT_YUYV:
-			layer_info.fb.mode = DISP_MOD_INTERLEAVED;
-			layer_info.fb.format = DISP_FORMAT_YUV422;
-			layer_info.fb.seq = DISP_SEQ_YUYV;
-			break;
-		case VDP_YCBCR_FORMAT_UYVY:
-			layer_info.fb.mode = DISP_MOD_INTERLEAVED;
-			layer_info.fb.format = DISP_FORMAT_YUV422;
-			layer_info.fb.seq = DISP_SEQ_UYVY;
-			break;
-		case VDP_YCBCR_FORMAT_NV12:
-			layer_info.fb.mode = DISP_MOD_NON_MB_UV_COMBINED;
-			break;
-		case VDP_YCBCR_FORMAT_YV12:
-			layer_info.fb.mode = DISP_MOD_NON_MB_PLANAR;
-			break;
-		default:
-		case INTERNAL_YCBCR_FORMAT:
-			layer_info.fb.mode = DISP_MOD_MB_UV_COMBINED;
-			break;
-		}
-		layer_info.fb.br_swap = 0;
-		layer_info.fb.addr[0] = ve_virt2phys(os->yuv->data) + 0x40000000;
-		layer_info.fb.addr[1] = ve_virt2phys(os->yuv->data + os->vs->luma_size) + 0x40000000;
-		layer_info.fb.addr[2] = ve_virt2phys(os->yuv->data + os->vs->luma_size + os->vs->luma_size / 4) + 0x40000000;
-
-		layer_info.fb.cs_mode = DISP_BT601;
-		layer_info.fb.size.width = os->vs->width;
-		layer_info.fb.size.height = os->vs->height;
-		layer_info.src_win.x = os->video_src_rect.x0;
-		layer_info.src_win.y = os->video_src_rect.y0;
-		layer_info.src_win.width = os->video_src_rect.x1 - os->video_src_rect.x0;
-		layer_info.src_win.height = os->video_src_rect.y1 - os->video_src_rect.y0;
-		layer_info.scn_win.x = x + os->video_dst_rect.x0;
-		layer_info.scn_win.y = y + os->video_dst_rect.y0;
-		layer_info.scn_win.width = os->video_dst_rect.x1 - os->video_dst_rect.x0;
-		layer_info.scn_win.height = os->video_dst_rect.y1 - os->video_dst_rect.y0;
-		layer_info.ck_enable = q->device->osd_enabled ? 0 : 1;
-
-		if (layer_info.scn_win.y < 0)
-		{
-			int cutoff = -(layer_info.scn_win.y);
-			layer_info.src_win.y += cutoff;
-			layer_info.src_win.height -= cutoff;
-			layer_info.scn_win.y = 0;
-			layer_info.scn_win.height -= cutoff;
-		}
-
-		uint32_t args[4] = { 0, q->target->layer, (unsigned long)(&layer_info), 0 };
-		ioctl(q->target->fd, DISP_CMD_LAYER_SET_PARA, args);
-
-		ioctl(q->target->fd, DISP_CMD_LAYER_OPEN, args);
-		// Note: might be more reliable (but slower and problematic when there
-		// are driver issues and the GET functions return wrong values) to query the
-		// old values instead of relying on our internal csc_change.
-		// Since the driver calculates a matrix out of these values after each
-		// set doing this unconditionally is costly.
-		if (os->csc_change) {
-			ioctl(q->target->fd, DISP_CMD_LAYER_ENHANCE_OFF, args);
-			args[2] = 0xff * os->brightness + 0x20;
-			ioctl(q->target->fd, DISP_CMD_LAYER_SET_BRIGHT, args);
-			args[2] = 0x20 * os->contrast;
-			ioctl(q->target->fd, DISP_CMD_LAYER_SET_CONTRAST, args);
-			args[2] = 0x20 * os->saturation;
-			ioctl(q->target->fd, DISP_CMD_LAYER_SET_SATURATION, args);
-			// hue scale is randomly chosen, no idea how it maps exactly
-			args[2] = (32 / 3.14) * os->hue + 0x20;
-			ioctl(q->target->fd, DISP_CMD_LAYER_SET_HUE, args);
-			ioctl(q->target->fd, DISP_CMD_LAYER_ENHANCE_ON, args);
-			os->csc_change = 0;
-		}
-	}
-	else
-	{
-		uint32_t args[4] = { 0, q->target->layer, 0, 0 };
-		ioctl(q->target->fd, DISP_CMD_LAYER_CLOSE, args);
-	}
-
-	if (!q->device->osd_enabled)
-		return VDP_STATUS_OK;
-
-	if (os->rgba.flags & RGBA_FLAG_NEEDS_CLEAR)
-		rgba_clear(&os->rgba);
-
-	if (os->rgba.flags & RGBA_FLAG_DIRTY)
-	{
-		// TOP layer
-		rgba_flush(&os->rgba);
-
-		__disp_layer_info_t layer_info;
-		memset(&layer_info, 0, sizeof(layer_info));
-		layer_info.pipe = 1;
-		layer_info.mode = DISP_LAYER_WORK_MODE_NORMAL;
-		layer_info.fb.mode = DISP_MOD_INTERLEAVED;
-		layer_info.fb.format = DISP_FORMAT_ARGB8888;
-		layer_info.fb.seq = DISP_SEQ_ARGB;
-		switch (os->rgba.format)
-		{
-		case VDP_RGBA_FORMAT_R8G8B8A8:
-			layer_info.fb.br_swap = 1;
-			break;
-		case VDP_RGBA_FORMAT_B8G8R8A8:
-		default:
-			layer_info.fb.br_swap = 0;
-			break;
-		}
-		layer_info.fb.addr[0] = ve_virt2phys(os->rgba.data) + 0x40000000;
-		layer_info.fb.cs_mode = DISP_BT601;
-		layer_info.fb.size.width = os->rgba.width;
-		layer_info.fb.size.height = os->rgba.height;
-		layer_info.src_win.x = os->rgba.dirty.x0;
-		layer_info.src_win.y = os->rgba.dirty.y0;
-		layer_info.src_win.width = os->rgba.dirty.x1 - os->rgba.dirty.x0;
-		layer_info.src_win.height = os->rgba.dirty.y1 - os->rgba.dirty.y0;
-		layer_info.scn_win.x = x + os->rgba.dirty.x0;
-		layer_info.scn_win.y = y + os->rgba.dirty.y0;
-		layer_info.scn_win.width = min_nz(clip_width, os->rgba.dirty.x1) - os->rgba.dirty.x0;
-		layer_info.scn_win.height = min_nz(clip_height, os->rgba.dirty.y1) - os->rgba.dirty.y0;
-
-		uint32_t args[4] = { 0, q->target->layer_top, (unsigned long)(&layer_info), 0 };
-		ioctl(q->target->fd, DISP_CMD_LAYER_SET_PARA, args);
-
-		ioctl(q->target->fd, DISP_CMD_LAYER_OPEN, args);
-	}
-	else
-	{
-		uint32_t args[4] = { 0, q->target->layer_top, 0, 0 };
-		ioctl(q->target->fd, DISP_CMD_LAYER_CLOSE, args);
-	}
-
 	return VDP_STATUS_OK;
 }
 
