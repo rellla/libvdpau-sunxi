@@ -39,6 +39,8 @@ static QUEUE *queue;
 
 static VdpTime frame_time;
 
+static int end_presentation;
+
 typedef struct task
 {
 	struct timespec		when;
@@ -346,7 +348,7 @@ out_osd:
 
 static void *presentation_thread(void *param)
 {
-	pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
+	pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
 	queue_ctx_t *q = param;
 	int fd_fb = 0;
 
@@ -357,7 +359,7 @@ static void *presentation_thread(void *param)
 			VDPAU_DBG("Error opening framebuffer device /dev/fb0");
 	}
 
-	while (1) {
+	while (!end_presentation) {
 		int64_t timeout;
 		struct timespec now;
 
@@ -479,7 +481,11 @@ VdpStatus vdp_presentation_queue_target_destroy(VdpPresentationQueueTarget prese
 	if (!qt)
 		return VDP_STATUS_INVALID_HANDLE;
 
-	pthread_cancel(presentation_thread_id);
+	end_presentation = 1;
+	pthread_join(presentation_thread_id, NULL);
+
+	q_queue_free(queue);
+	queue = NULL;
 
 	uint32_t args[4] = { 0, qt->layer, 0, 0 };
 
@@ -525,6 +531,7 @@ VdpStatus vdp_presentation_queue_create(VdpDevice device,
 
 	// initialize queue and launch worker thread
 	if (!queue) {
+		end_presentation = 0;
 		queue = q_queue_init();
 		pthread_create(&presentation_thread_id, NULL, presentation_thread, q);
 	}
@@ -538,7 +545,6 @@ VdpStatus vdp_presentation_queue_destroy(VdpPresentationQueue presentation_queue
 	if (!q)
 		return VDP_STATUS_INVALID_HANDLE;
 
-	q_queue_free(queue);
 	handle_destroy(presentation_queue);
 
 	return VDP_STATUS_OK;
