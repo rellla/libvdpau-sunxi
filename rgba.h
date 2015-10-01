@@ -26,7 +26,9 @@ VdpStatus rgba_create(rgba_surface_t *rgba,
                       device_ctx_t *device,
                       uint32_t width,
                       uint32_t height,
-                      VdpRGBAFormat format);
+                      VdpRGBAFormat format,
+                      int idx,
+                      int type);
 
 void rgba_destroy(rgba_surface_t *rgba);
 
@@ -59,7 +61,6 @@ VdpStatus rgba_render_surface(rgba_surface_t *dest,
 void rgba_clear(rgba_surface_t *rgba);
 void rgba_fill(rgba_surface_t *dest, const VdpRect *dest_rect, uint32_t color);
 void rgba_blit(rgba_surface_t *dest, const VdpRect *dest_rect, rgba_surface_t *src, const VdpRect *src_rect);
-
 void rgba_flush(rgba_surface_t *rgba);
 
 #endif

@@ -41,6 +41,8 @@ VdpStatus vdp_decoder_create(VdpDevice device,
                              uint32_t max_references,
                              VdpDecoder *decoder)
 {
+	static int idx = 0;
+
 	smart device_ctx_t *dev = handle_get(device);
 	if (!dev)
 		return VDP_STATUS_INVALID_HANDLE;
@@ -56,8 +58,9 @@ VdpStatus vdp_decoder_create(VdpDevice device,
 	dec->profile = profile;
 	dec->width = width;
 	dec->height = height;
+	dec->idx = idx++;
 
-	dec->data = ve_malloc(VBV_SIZE);
+	dec->data = ve_malloc(VBV_SIZE, dec->idx, DECODER);
 	if (!(dec->data))
 		return VDP_STATUS_RESOURCES;
 
@@ -88,6 +91,9 @@ VdpStatus vdp_decoder_create(VdpDevice device,
 
 	if (ret != VDP_STATUS_OK)
 		return VDP_STATUS_ERROR;
+
+	VDPAU_LOG(LINFO, "Decoder created");
+	ve_dumpmem();
 
 	return handle_create(decoder, dec);
 }

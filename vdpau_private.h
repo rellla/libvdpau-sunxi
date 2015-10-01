@@ -88,6 +88,7 @@ typedef struct
 {
 	int ref_count;
 	void *data;
+	int idx;
 } yuv_data_t;
 
 typedef struct video_surface_ctx_struct
@@ -113,6 +114,7 @@ typedef struct decoder_ctx_struct
 	VdpStatus (*decode)(struct decoder_ctx_struct *decoder, VdpPictureInfo const *info, const int len, video_surface_ctx_t *output);
 	void *private;
 	void (*private_free)(struct decoder_ctx_struct *decoder);
+	int idx;
 } decoder_ctx_t;
 
 typedef struct
@@ -203,7 +205,8 @@ typedef struct
 	int video_deinterlace, video_field;
 	VdpTime first_presentation_time;
 	VdpPresentationQueueStatus status;
-	uint32_t id;
+	uint32_t cnt;
+	uint32_t idx;
 	pthread_mutex_t mutex;
 	pthread_cond_t cond;
 	VdpTime start, stop;
@@ -213,6 +216,7 @@ typedef struct
 {
 	rgba_surface_t rgba;
 	VdpBool frequently_accessed;
+	uint32_t idx;
 } bitmap_surface_ctx_t;
 
 #ifndef ARRAY_SIZE

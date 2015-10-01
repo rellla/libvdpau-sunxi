@@ -184,7 +184,7 @@ VdpStatus vdp_presentation_queue_display(VdpPresentationQueue presentation_queue
 	if (!os)
 		return VDP_STATUS_INVALID_HANDLE;
 
-	static uint32_t id = 0;
+	static uint32_t cnt = 0;
 	task_t *task = (task_t *)calloc(1, sizeof(task_t));
 	task->when = earliest_presentation_time;
 	task->clip_width = clip_width;
@@ -194,7 +194,7 @@ VdpStatus vdp_presentation_queue_display(VdpPresentationQueue presentation_queue
 	task->control = CONTROL_NULL;
 	os->first_presentation_time = 0;
 	os->status = VDP_PRESENTATION_QUEUE_STATUS_QUEUED;
-	os->id = id++;
+	os->cnt = cnt++;
 
 	if(q_push_tail(Queue, task))
 	{
@@ -206,7 +206,7 @@ VdpStatus vdp_presentation_queue_display(VdpPresentationQueue presentation_queue
 
 #ifdef DEBUG_TIME
 	os->stop = get_vdp_time();
-	VDPAU_LOG(LDBG, "Pushing surface %d at %" PRIu64 ", Diff: %" PRIu64 "", os->id, os->stop, (os->stop - os->start) / 1000);
+	VDPAU_LOG(LDBG, "Pushing surface %d at %" PRIu64 ", Diff: %" PRIu64 "", os->cnt, os->stop, (os->stop - os->start) / 1000);
 #endif
 	return VDP_STATUS_OK;
 }
@@ -772,7 +772,7 @@ static void *presentation_thread(void *param)
 				if (do_presentation_queue_display(task))
 					VDPAU_LOG(LERR, "Something went wrong while displaying ...");
 				else
-					VDPAU_LOG(LDBG, "Processed surface %d", os_cur->id);
+					VDPAU_LOG(LDBG, "Processed surface %d", os_cur->cnt);
 #ifdef DEBUG_TIME
 				stop = get_vdp_time();
 #endif
@@ -1064,7 +1064,7 @@ VdpStatus vdp_presentation_queue_block_until_surface_idle(VdpPresentationQueue p
 
 #ifdef DEBUG_TIME
 	os->start = get_vdp_time();
-	VDPAU_LOG(LDBG, "Last surface %d was unblocked at %" PRIu64 ", Diff: %" PRIu64 "", os->id, os->start, (os->start - os->stop) / 1000);
+	VDPAU_LOG(LDBG, "Last surface %d was unblocked at %" PRIu64 ", Diff: %" PRIu64 "", os->cnt, os->start, (os->start - os->stop) / 1000);
 #endif
 
 	return VDP_STATUS_OK;

@@ -31,6 +31,9 @@ static void cleanup_device(void *ptr, void *meta)
 		close(device->g2d_fd);
 	if (device->flags & DEVICE_FLAG_VSYNC)
 		close(device->fb_fd);
+
+	ve_dumpmem();
+
 	ve_close();
 	XCloseDisplay(device->display);
 }

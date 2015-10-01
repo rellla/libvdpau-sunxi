@@ -78,6 +78,7 @@ typedef struct
 	void *mbh_buffer;
 	void *dcac_buffer;
 	void *ncf_buffer;
+	int idx;
 } mpeg4_private_t;
 
 static void mpeg4_private_free(decoder_ctx_t *decoder)
@@ -271,6 +272,8 @@ static VdpStatus mpeg4_decode(decoder_ctx_t *decoder,
 
 VdpStatus new_decoder_mpeg4(decoder_ctx_t *decoder)
 {
+	static int idx = 0;
+
 	mpeg4_private_t *decoder_p = calloc(1, sizeof(mpeg4_private_t));
 	if (!decoder_p)
 		goto err_priv;
@@ -278,15 +281,17 @@ VdpStatus new_decoder_mpeg4(decoder_ctx_t *decoder)
 	int width = ((decoder->width + 15) / 16);
 	int height = ((decoder->height + 15) / 16);
 
-	decoder_p->mbh_buffer = ve_malloc(height * 2048);
+	decoder_p->idx = idx++;
+
+	decoder_p->mbh_buffer = ve_malloc(height * 2048, decoder_p->idx, DEC_P_MBH);
 	if (!decoder_p->mbh_buffer)
 		goto err_mbh;
 
-	decoder_p->dcac_buffer = ve_malloc(width * height * 2);
+	decoder_p->dcac_buffer = ve_malloc(width * height * 2, decoder_p->idx, DEC_P_DCAC);
 	if (!decoder_p->dcac_buffer)
 		goto err_dcac;
 
-	decoder_p->ncf_buffer = ve_malloc(4 * 1024);
+	decoder_p->ncf_buffer = ve_malloc(4 * 1024, decoder_p->idx, DEC_P_NCF);
 	if (!decoder_p->ncf_buffer)
 		goto err_ncf;
 

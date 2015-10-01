@@ -19,12 +19,12 @@
 
 #include "vdpau_private.h"
 #include "rgba.h"
+#include "ve.h"
 
 #ifdef GRAB
 #include <sys/ioctl.h>
 #include "g2d_driver.h"
 #include "tiled_yuv.h"
-#include "ve.h"
 #endif
 
 static void cleanup_output_surface(void *ptr, void *meta)
@@ -51,6 +51,7 @@ VdpStatus vdp_output_surface_create(VdpDevice device,
                                     VdpOutputSurface *surface)
 {
 	int ret = VDP_STATUS_OK;
+	static int idx = 0;
 
 	if (!surface)
 		return VDP_STATUS_INVALID_POINTER;
@@ -67,22 +68,26 @@ VdpStatus vdp_output_surface_create(VdpDevice device,
 	out->saturation = 1.0;
 	out->first_presentation_time = 0;
 	out->status = VDP_PRESENTATION_QUEUE_STATUS_IDLE;
+	out->idx = idx++;
 
 	pthread_mutex_init(&out->mutex, NULL);
 	pthread_cond_init(&out->cond, NULL);
 
-	ret = rgba_create(&out->rgba, dev, width, height, rgba_format);
+	ret = rgba_create(&out->rgba, dev, width, height, rgba_format, out->idx, OSURFACE);
 	if (ret != VDP_STATUS_OK)
 		return ret;
 
 #ifdef GRAB
-	ret = rgba_create(&out->grab_rgba, dev, width, height, rgba_format);
+	ret = rgba_create(&out->grab_rgba, dev, width, height, rgba_format, out->idx, OSURFACE);
 	if (ret != VDP_STATUS_OK)
 	{
 		rgba_destroy(&out->rgba);
 		return ret;
 	}
 #endif
+
+	VDPAU_LOG(LINFO, "Output surface created");
+	ve_dumpmem();
 
 	return handle_create(surface, out);
 }
@@ -129,7 +134,7 @@ VdpStatus vdp_output_surface_get_bits_native(VdpOutputSurface surface,
 	width = out->vs->width;
 	height = out->vs->height;
 
-	data = ve_malloc(width * height + ((width + 1) / 2) * ((height + 1) / 2));
+	data = ve_malloc(width * height + ((width + 1) / 2) * ((height + 1) / 2), 0, OSURFACE_GBN);
 	vs_data[0] = data;
 	vs_data[1] = data + (width * height);
 	vs_destination_pitches[0] = width;

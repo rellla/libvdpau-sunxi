@@ -19,6 +19,7 @@
 
 #include "vdpau_private.h"
 #include "rgba.h"
+#include "ve.h"
 
 static void cleanup_bitmap_surface(void *ptr, void *meta)
 {
@@ -35,6 +36,7 @@ VdpStatus vdp_bitmap_surface_create(VdpDevice device,
                                     VdpBitmapSurface *surface)
 {
 	int ret = VDP_STATUS_OK;
+	static int idx = 0;
 
 	if (!surface)
 		return VDP_STATUS_INVALID_POINTER;
@@ -48,10 +50,14 @@ VdpStatus vdp_bitmap_surface_create(VdpDevice device,
 		return VDP_STATUS_RESOURCES;
 
 	out->frequently_accessed = frequently_accessed;
+	out->idx = idx++;
 
-	ret = rgba_create(&out->rgba, dev, width, height, rgba_format);
+	ret = rgba_create(&out->rgba, dev, width, height, rgba_format, out->idx, BSURFACE);
 	if (ret != VDP_STATUS_OK)
 		return ret;
+
+	VDPAU_LOG(LINFO, "Bitmap surface created");
+	ve_dumpmem();
 
 	return handle_create(surface, out);
 }

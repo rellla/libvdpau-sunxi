@@ -22,6 +22,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
@@ -75,6 +76,8 @@ struct memchunk_t
 	int size;
 	void *virt_addr;
 	struct memchunk_t *next;
+	int idx;
+	int type;
 };
 
 static struct
@@ -170,7 +173,7 @@ void ve_put(void)
 	pthread_mutex_unlock(&ve.device_lock);
 }
 
-void *ve_malloc(int size)
+void *ve_malloc(int size, int idx, int type)
 {
 	if (ve.fd == -1)
 		return NULL;
@@ -216,6 +219,8 @@ void *ve_malloc(int size)
 		c->size = left_size;
 		c->virt_addr = NULL;
 		c->next = best_chunk->next;
+		c->idx = idx;
+		c->type = type;
 		best_chunk->next = c;
 	}
 
@@ -293,6 +298,59 @@ uint32_t ve_virt2phys(void *ptr)
 
 	pthread_rwlock_unlock(&ve.memory_lock);
 	return addr;
+}
+
+void ve_dumpmem(void)
+{
+	struct memchunk_t *c;
+	char string[20];
+	for (c = &ve.first_memchunk; c != NULL; c = c->next)
+	{
+		if (c->virt_addr == NULL)
+			VDPAU_LOG(LINFO, "VE memdump: 0x%08x - 0x%08x (%i) -> free",
+			  c->phys_addr, c->phys_addr + c->size -1, c->size);
+		else
+		{
+			switch (c->type)
+			{
+				case DECODER:
+					strcpy(string, "Decoder");
+					break;
+				case DEC_P_MBH:
+					strcpy(string, "DecoderMBH");
+					break;
+				case DEC_P_DCAC:
+					strcpy(string, "DecoderDCAC");
+					break;
+				case DEC_P_NCF:
+					strcpy(string, "DecoderNCF");
+					break;
+				case H264_SPRIV:
+					strcpy(string, "H264_surface_priv");
+					break;
+				case H264_DPRIV:
+					strcpy(string, "H264_decoder_priv");
+					break;
+				case BSURFACE:
+					strcpy(string, "BitmapSurface");
+					break;
+				case OSURFACE:
+					strcpy(string, "OutputSurface");
+					break;
+				case OSURFACE_GBN:
+					strcpy(string, "OutputSurfaceGBN");
+					break;
+				case VSURFACE_YUVDATA:
+					strcpy(string, "VideoSurfaceYUV");
+					break;
+				default:
+					strcpy(string, "undefined");
+					break;
+			}
+			VDPAU_LOG(LINFO, "VE memdump: 0x%08x - 0x%08x (%i KB) -> %p (%s[%i])",
+			  c->phys_addr, c->phys_addr + c->size -1, c->size / 1024, c->virt_addr, string, c->idx);
+		}
+	}
 }
 
 void ve_flush_cache(void *start, int len)

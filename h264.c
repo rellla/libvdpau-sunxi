@@ -145,6 +145,7 @@ typedef struct
 typedef struct
 {
 	void *extra_data;
+	int idx;
 } h264_private_t;
 
 static void h264_private_free(decoder_ctx_t *decoder)
@@ -163,6 +164,7 @@ typedef struct
 	void *extra_data;
 	uint8_t pos;
 	uint8_t pic_type;
+	int idx;
 } h264_video_private_t;
 
 static void h264_video_private_free(video_surface_ctx_t *surface)
@@ -175,6 +177,7 @@ static void h264_video_private_free(video_surface_ctx_t *surface)
 static h264_video_private_t *get_surface_priv(h264_context_t *c, video_surface_ctx_t *surface)
 {
 	h264_video_private_t *surface_p = surface->decoder_private;
+	static int idx = 0;
 
 	if (!surface_p)
 	{
@@ -182,12 +185,16 @@ static h264_video_private_t *get_surface_priv(h264_context_t *c, video_surface_c
 		if (!surface_p)
 			return NULL;
 
-		surface_p->extra_data = ve_malloc(c->video_extra_data_len * 2);
+		surface_p->idx = idx++;
+		surface_p->extra_data = ve_malloc(c->video_extra_data_len * 2, surface_p->idx, H264_SPRIV);
 		if (!surface_p->extra_data)
 		{
 			free(surface_p);
 			return NULL;
 		}
+
+		VDPAU_LOG(LINFO, "H264 extra data allocated");
+		ve_dumpmem();
 
 		surface->decoder_private = surface_p;
 		surface->decoder_private_free = h264_video_private_free;
@@ -944,6 +951,7 @@ static VdpStatus h264_decode(decoder_ctx_t *decoder,
 
 VdpStatus new_decoder_h264(decoder_ctx_t *decoder)
 {
+	static int idx = 0;
 	h264_private_t *decoder_p = calloc(1, sizeof(h264_private_t));
 	if (!decoder_p)
 		return VDP_STATUS_RESOURCES;
@@ -957,7 +965,8 @@ VdpStatus new_decoder_h264(decoder_ctx_t *decoder)
 		extra_data_size += ((decoder->width - 1) / 16 + 64) * 80;
 	}
 
-	decoder_p->extra_data = ve_malloc(extra_data_size);
+	decoder_p->idx = idx++;
+	decoder_p->extra_data = ve_malloc(extra_data_size, decoder_p->idx, H264_DPRIV);
 	if (!decoder_p->extra_data)
 	{
 		free(decoder_p);

@@ -126,7 +126,9 @@ VdpStatus rgba_create(rgba_surface_t *rgba,
                       device_ctx_t *device,
                       uint32_t width,
                       uint32_t height,
-                      VdpRGBAFormat format)
+                      VdpRGBAFormat format,
+                      int idx,
+                      int type)
 {
 	if (format != VDP_RGBA_FORMAT_B8G8R8A8 &&
 	    format != VDP_RGBA_FORMAT_R8G8B8A8 &&
@@ -143,7 +145,7 @@ VdpStatus rgba_create(rgba_surface_t *rgba,
 
 	if (device->flags & DEVICE_FLAG_OSD)
 	{
-		rgba->data = ve_malloc(width * height * GET_BPP_FROM_FORMAT(rgba->format));
+		rgba->data = ve_malloc(width * height * GET_BPP_FROM_FORMAT(rgba->format), idx, type);
 		if (!rgba->data)
 			return VDP_STATUS_RESOURCES;
 

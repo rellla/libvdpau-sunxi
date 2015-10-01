@@ -29,9 +29,21 @@ int ve_wait(int timeout);
 void *ve_get(int engine, uint32_t flags);
 void ve_put(void);
 
-void *ve_malloc(int size);
+void *ve_malloc(int size, int idx, int type);
 void ve_free(void *ptr);
 uint32_t ve_virt2phys(void *ptr);
+void ve_dumpmem(void);
+#define DECODER			1
+#define DEC_P_MBH		2
+#define DEC_P_DCAC		3
+#define DEC_P_NCF		4
+#define H264_SPRIV		5
+#define H264_DPRIV		6
+#define BSURFACE		7
+#define OSURFACE		8
+#define OSURFACE_GBN		9
+#define VSURFACE_YUVDATA	10
+
 void ve_flush_cache(void *start, int len);
 
 static inline void writel(uint32_t val, void *addr)

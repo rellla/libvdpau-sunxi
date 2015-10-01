@@ -41,23 +41,26 @@ yuv_data_t *yuv_ref(yuv_data_t *yuv)
 
 static VdpStatus yuv_new(video_surface_ctx_t *video_surface)
 {
+	static int idx = 0;
+
 	video_surface->yuv = calloc(1, sizeof(yuv_data_t));
 	if (!video_surface->yuv)
 		return VDP_STATUS_RESOURCES;
 
 	video_surface->yuv->ref_count = 1;
+	video_surface->yuv->idx = idx++;
 
 	switch (video_surface->chroma_type)
 	{
 	case VDP_CHROMA_TYPE_444:
-		video_surface->yuv->data = ve_malloc(video_surface->luma_size * 3);
+		video_surface->yuv->data = ve_malloc(video_surface->luma_size * 3, video_surface->yuv->idx, VSURFACE_YUVDATA);
 		break;
 	case VDP_CHROMA_TYPE_422:
-		video_surface->yuv->data = ve_malloc(video_surface->luma_size * 2);
+		video_surface->yuv->data = ve_malloc(video_surface->luma_size * 2, video_surface->yuv->idx, VSURFACE_YUVDATA);
 		break;
 	case VDP_CHROMA_TYPE_420:
 		video_surface->yuv->data = ve_malloc(video_surface->luma_size +
-			ALIGN(video_surface->width, 32) * ALIGN(video_surface->height / 2, 32));
+			ALIGN(video_surface->width, 32) * ALIGN(video_surface->height / 2, 32), video_surface->yuv->idx, VSURFACE_YUVDATA);
 		break;
 	default:
 		free(video_surface->yuv);
@@ -126,6 +129,9 @@ VdpStatus vdp_video_surface_create(VdpDevice device,
 	VdpStatus ret = yuv_new(vs);
 	if (ret != VDP_STATUS_OK)
 		return ret;
+
+	VDPAU_LOG(LINFO, "Video surface created");
+	ve_dumpmem();
 
 	return handle_create(surface, vs);
 }
