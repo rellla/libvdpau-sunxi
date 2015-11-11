@@ -461,13 +461,13 @@ void set_csc_matrix(mixer_ctx_t *mix, VdpColorStandard standard)
 			/* Saturation */
 			mix->saturation = (*matrix)[1][1] / (mix->contrast * ((*cstd)[1][1] * cosf(mix->hue) - (*cstd)[1][2] * sinf(mix->hue)));
 		}
-
-		/* Brightness */
-		mix->brightness = ((*matrix)[1][3] -
-		                  (*cstd)[1][1] * mix->contrast * mix->saturation * (cbbias * cosf(mix->hue) + crbias * sinf(mix->hue)) -
-		                  (*cstd)[1][2] * mix->contrast * mix->saturation * (crbias * cosf(mix->hue) - cbbias * sinf(mix->hue)) -
-		                  (*cstd)[1][3] - (*cstd)[1][0] * mix->contrast * ybias) / (*cstd)[1][0];
 	}
+
+	/* Brightness */
+	mix->brightness = ((*matrix)[1][3] -
+	                  (*cstd)[1][1] * mix->contrast * mix->saturation * (cbbias * cosf(mix->hue) + crbias * sinf(mix->hue)) -
+	                  (*cstd)[1][2] * mix->contrast * mix->saturation * (crbias * cosf(mix->hue) - cbbias * sinf(mix->hue)) -
+	                  (*cstd)[1][3] - (*cstd)[1][0] * mix->contrast * ybias) / (*cstd)[1][0];
 
 	VDPAU_LOG(LINFO, "Setting mixer value from following color standard: %d", standard);
 	VDPAU_LOG(LINFO, ">mix->bright: %2.3f, mix->contrast: %2.3f, mix->saturation: %2.3f, mix->hue: %2.3f",
