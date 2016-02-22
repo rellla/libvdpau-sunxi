@@ -17,6 +17,8 @@ Some of them probably will never get fully supported due to hardware specific li
 * libvdpau >= 1.1
 * libcedrus (https://github.com/linux-sunxi/libcedrus)
 * pixman (http://www.pixman.org)
+* libcsptr (https://github.com/Snaipe/libcsptr)
+* gcc >= 4.6
 
 # Installation:
 ```

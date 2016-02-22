@@ -68,6 +68,18 @@ VdpStatus yuv_prepare(video_surface_ctx_t *video_surface)
 	return VDP_STATUS_OK;
 }
 
+static void cleanup_video_surface(void *ptr, void *meta)
+{
+	video_surface_ctx_t *surface = ptr;
+
+	if (surface->decoder_private_free)
+		surface->decoder_private_free(surface);
+
+	yuv_unref(surface->yuv);
+
+	sfree(surface->device);
+}
+
 VdpStatus vdp_video_surface_create(VdpDevice device,
                                    VdpChromaType chroma_type,
                                    uint32_t width,
@@ -80,15 +92,15 @@ VdpStatus vdp_video_surface_create(VdpDevice device,
 	if (width < 1 || width > 8192 || height < 1 || height > 8192)
 		return VDP_STATUS_INVALID_SIZE;
 
-	device_ctx_t *dev = handle_get(device);
+	smart device_ctx_t *dev = handle_get(device);
 	if (!dev)
 		return VDP_STATUS_INVALID_HANDLE;
 
-	video_surface_ctx_t *vs = handle_create(sizeof(*vs), surface);
+	smart video_surface_ctx_t *vs = handle_alloc(sizeof(*vs), cleanup_video_surface);
 	if (!vs)
 		return VDP_STATUS_RESOURCES;
 
-	vs->device = dev;
+	vs->device = sref(dev);
 	vs->width = width;
 	vs->height = height;
 	vs->chroma_type = chroma_type;
@@ -112,28 +124,9 @@ VdpStatus vdp_video_surface_create(VdpDevice device,
 
 	VdpStatus ret = yuv_new(vs);
 	if (ret != VDP_STATUS_OK)
-	{
-		handle_destroy(*surface);
 		return ret;
-	}
 
-	return VDP_STATUS_OK;
-}
-
-VdpStatus vdp_video_surface_destroy(VdpVideoSurface surface)
-{
-	video_surface_ctx_t *vs = handle_get(surface);
-	if (!vs)
-		return VDP_STATUS_INVALID_HANDLE;
-
-	if (vs->decoder_private_free)
-		vs->decoder_private_free(vs);
-
-	yuv_unref(vs->yuv);
-
-	handle_destroy(surface);
-
-	return VDP_STATUS_OK;
+	return handle_create(surface, vs);
 }
 
 VdpStatus vdp_video_surface_get_parameters(VdpVideoSurface surface,
@@ -141,7 +134,7 @@ VdpStatus vdp_video_surface_get_parameters(VdpVideoSurface surface,
                                            uint32_t *width,
                                            uint32_t *height)
 {
-	video_surface_ctx_t *vid = handle_get(surface);
+	smart video_surface_ctx_t *vid = handle_get(surface);
 	if (!vid)
 		return VDP_STATUS_INVALID_HANDLE;
 
@@ -162,7 +155,7 @@ VdpStatus vdp_video_surface_get_bits_y_cb_cr(VdpVideoSurface surface,
                                              void *const *destination_data,
                                              uint32_t const *destination_pitches)
 {
-	video_surface_ctx_t *vs = handle_get(surface);
+	smart video_surface_ctx_t *vs = handle_get(surface);
 	if (!vs)
 		return VDP_STATUS_INVALID_HANDLE;
 
@@ -232,7 +225,7 @@ VdpStatus vdp_video_surface_put_bits_y_cb_cr(VdpVideoSurface surface,
 	int i;
 	const uint8_t *src;
 	uint8_t *dst;
-	video_surface_ctx_t *vs = handle_get(surface);
+	smart video_surface_ctx_t *vs = handle_get(surface);
 	if (!vs)
 		return VDP_STATUS_INVALID_HANDLE;
 
@@ -321,7 +314,7 @@ VdpStatus vdp_video_surface_query_capabilities(VdpDevice device,
 	if (!is_supported || !max_width || !max_height)
 		return VDP_STATUS_INVALID_POINTER;
 
-	device_ctx_t *dev = handle_get(device);
+	smart device_ctx_t *dev = handle_get(device);
 	if (!dev)
 		return VDP_STATUS_INVALID_HANDLE;
 
@@ -340,7 +333,7 @@ VdpStatus vdp_video_surface_query_get_put_bits_y_cb_cr_capabilities(VdpDevice de
 	if (!is_supported)
 		return VDP_STATUS_INVALID_POINTER;
 
-	device_ctx_t *dev = handle_get(device);
+	smart device_ctx_t *dev = handle_get(device);
 	if (!dev)
 		return VDP_STATUS_INVALID_HANDLE;
 
