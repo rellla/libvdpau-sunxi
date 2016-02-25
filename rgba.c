@@ -78,7 +78,7 @@ static int rgba_changed(rgba_surface_t *dest,
 			VdpOutputSurfaceRenderBlendState const *blend_state,
 			uint32_t flags)
 {
-	int id = -1;
+	uint32_t id = 0;
 	if (src)
 		id = src->id;
 
@@ -146,7 +146,8 @@ VdpStatus rgba_create(rgba_surface_t *rgba,
 		rgba->dirty.x1 = 0;
 		rgba->dirty.y1 = 0;
 		rgba_fill(rgba, NULL, 0x00000000);
-		rgba->id = 0;
+		rgba->id = 1;
+		rgba->gl = 0;
 	}
 
 	return VDP_STATUS_OK;
@@ -330,6 +331,7 @@ void rgba_clear(rgba_surface_t *rgba)
 	rgba->dirty.y0 = rgba->height;
 	rgba->dirty.x1 = 0;
 	rgba->dirty.y1 = 0;
+	rgba->gl = 0;
 }
 
 void rgba_fill(rgba_surface_t *dest, const VdpRect *dest_rect, uint32_t color)
@@ -353,6 +355,9 @@ void rgba_blit(rgba_surface_t *dest, const VdpRect *dest_rect, rgba_surface_t *s
 {
 	if (dest->device->osd_enabled)
 	{
+		if (src->gl == 1)
+			rgba_clear(dest);
+
 		if(dest->device->g2d_enabled)
 		{
 			rgba_flush(dest);

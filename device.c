@@ -185,6 +185,18 @@ static void *const functions[] =
 	[VDP_FUNC_ID_PRESENTATION_QUEUE_BLOCK_UNTIL_SURFACE_IDLE]           = vdp_presentation_queue_block_until_surface_idle,
 	[VDP_FUNC_ID_PRESENTATION_QUEUE_QUERY_SURFACE_STATUS]               = vdp_presentation_queue_query_surface_status,
 	[VDP_FUNC_ID_PREEMPTION_CALLBACK_REGISTER]                          = vdp_preemption_callback_register,
+#ifdef USE_INTEROP
+	[VDP_FUNC_ID_Init_NV] = glVDPAUInitNV,
+	[VDP_FUNC_ID_Fini_NV] = glVDPAUFiniNV,
+	[VDP_FUNC_ID_RegisterVideoSurface_NV] = glVDPAURegisterVideoSurfaceNV,
+	[VDP_FUNC_ID_RegisterOutputSurface_NV] = glVDPAURegisterOutputSurfaceNV,
+	[VDP_FUNC_ID_IsSurface_NV] = glVDPAUIsSurfaceNV,
+	[VDP_FUNC_ID_UnregisterSurface_NV] = glVDPAUUnregisterSurfaceNV,
+	[VDP_FUNC_ID_GetSurfaceiv_NV] = glVDPAUGetSurfaceivNV,
+	[VDP_FUNC_ID_SurfaceAccess_NV] = glVDPAUSurfaceAccessNV,
+	[VDP_FUNC_ID_MapSurfaces_NV] = glVDPAUMapSurfacesNV,
+	[VDP_FUNC_ID_UnmapSurfaces_NV] = glVDPAUUnmapSurfacesNV,
+#endif
 };
 
 VdpStatus vdp_get_proc_address(VdpDevice device_handle,

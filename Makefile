@@ -12,6 +12,16 @@ CC ?= gcc
 CFLAGS += $(shell pkg-config --cflags pixman-1)
 LIBS += $(shell pkg-config --libs pixman-1)
 
+ifeq ($(GLES),1)
+SRC += nv_interop.c
+LIBS += -lEGL -lGLESv2
+CFLAGS += -DUSE_INTEROP -g
+else
+SRC += 
+LIBS += 
+CFLAGS += 
+endif
+
 DEP_CFLAGS = -MD -MP -MQ $@
 LIB_CFLAGS = -fpic -fvisibility=hidden
 LIB_LDFLAGS = -shared -Wl,-soname,$(TARGET)

@@ -36,6 +36,9 @@
 #include "sunxi_disp.h"
 #include "pixman.h"
 #include "queue.h"
+#ifdef USE_INTEROP
+#include "nv_interop.h"
+#endif
 
 #define INTERNAL_YCBCR_FORMAT (VdpYCbCrFormat)0xffff
 
@@ -72,6 +75,10 @@ typedef struct video_surface_ctx_struct
 	cedrus_mem_t *rec;
 	void *decoder_private;
 	void (*decoder_private_free)(struct video_surface_ctx_struct *surface);
+#ifdef USE_INTEROP
+	enum VdpauNVState nv_state;
+	enum VdpauNVAccess nv_access;
+#endif
 } video_surface_ctx_t;
 
 typedef struct decoder_ctx_struct
@@ -125,7 +132,7 @@ typedef struct
 
 typedef struct
 {
-	int id;
+	uint32_t id;
 	VdpRect s_rect, d_rect;
 	VdpColor colors;
 	uint32_t flags;
@@ -141,8 +148,9 @@ typedef struct
 	VdpRect dirty;
 	uint32_t flags;
 	pixman_image_t *pimage;
-	int id;
+	uint32_t id;
 	rgba_refsurface_t refrgba;
+	uint32_t gl;
 } rgba_surface_t;
 
 typedef struct output_surface_ctx_struct
@@ -161,6 +169,10 @@ typedef struct output_surface_ctx_struct
 	pthread_mutex_t mutex;
 	pthread_cond_t cond;
 	int reinit_disp;
+#ifdef USE_INTEROP
+	enum VdpauNVState nv_state;
+	enum VdpauNVAccess nv_access;
+#endif
 } output_surface_ctx_t;
 
 typedef struct
