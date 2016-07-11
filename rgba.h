@@ -28,7 +28,8 @@ VdpStatus rgba_create(rgba_surface_t *rgba,
                       uint32_t height,
                       VdpRGBAFormat format);
 
-void rgba_destroy(rgba_surface_t *rgba);
+void rgba_cleanup(void *rgba);
+void rgba_print_value(void *itemdata);
 
 VdpStatus rgba_put_bits_native(rgba_surface_t *rgba,
                                void const *const *source_data,

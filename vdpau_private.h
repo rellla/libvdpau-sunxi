@@ -36,6 +36,7 @@
 #include "sunxi_disp.h"
 #include "pixman.h"
 #include "queue.h"
+#include "cache.h"
 
 #define INTERNAL_YCBCR_FORMAT (VdpYCbCrFormat)0xffff
 
@@ -51,6 +52,7 @@ typedef struct
 	int osd_enabled;
 	int g2d_enabled;
 	struct sunxi_disp *disp;
+	CACHE *rgba_cache;
 } device_ctx_t;
 
 typedef struct
@@ -147,7 +149,9 @@ typedef struct
 
 typedef struct output_surface_ctx_struct
 {
-	rgba_surface_t rgba;
+	device_ctx_t *device;
+	rgba_surface_t *rgba_p;
+	int rgba_handle;
 	video_surface_ctx_t *vs;
 	yuv_data_t *yuv;
 	VdpRect video_src_rect, video_dst_rect;
@@ -165,7 +169,9 @@ typedef struct output_surface_ctx_struct
 
 typedef struct
 {
-	rgba_surface_t rgba;
+	device_ctx_t *device;
+	rgba_surface_t *rgba_p;
+	int rgba_handle;
 	VdpBool frequently_accessed;
 } bitmap_surface_ctx_t;
 

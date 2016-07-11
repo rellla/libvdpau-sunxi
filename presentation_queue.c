@@ -293,12 +293,12 @@ static VdpStatus do_presentation_queue_display(queue_ctx_t *q, task_t *task)
 	if (!q->device->osd_enabled)
 		return VDP_STATUS_OK;
 
-	if (os->rgba.flags & RGBA_FLAG_NEEDS_CLEAR)
-		rgba_clear(&os->rgba);
+	if (os->rgba_p->flags & RGBA_FLAG_NEEDS_CLEAR)
+		rgba_clear(os->rgba_p);
 
-	if (os->rgba.flags & RGBA_FLAG_DIRTY)
+	if (os->rgba_p->flags & RGBA_FLAG_DIRTY)
 	{
-		rgba_flush(&os->rgba);
+		rgba_flush(os->rgba_p);
 		q->target->disp->set_osd_layer(q->target->disp, q->target->x, q->target->y, clip_width, clip_height, os);
 	}
 	else
@@ -379,6 +379,7 @@ static void *presentation_thread(void *param)
 			{
 				os_cur->first_presentation_time = lastvsync;
 				os_cur->status = VDP_PRESENTATION_QUEUE_STATUS_VISIBLE;
+				rgba_ref(os_cur->rgba_handle, os_cur->device->rgba_cache);
 			}
 
 			if (os_prev)
@@ -388,6 +389,9 @@ static void *presentation_thread(void *param)
 				os_prev->yuv = NULL;
 				sfree(os_prev->vs);
 				os_prev->vs = NULL;
+
+				if (os_prev->rgba_p)
+					rgba_unref(os_prev->rgba_handle, os_prev->device->rgba_cache, rgba_cleanup);
 
 				pthread_mutex_lock(&os_prev->mutex);
 				if (os_prev->status != VDP_PRESENTATION_QUEUE_STATUS_IDLE)

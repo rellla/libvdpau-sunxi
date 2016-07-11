@@ -229,16 +229,16 @@ static int sunxi_disp2_set_osd_layer(struct sunxi_disp *sunxi_disp, int x, int y
 
 	unsigned long args[4] = { 0, (unsigned long)(&disp->osd_config), 1, 0 };
 
-	disp_rect src = { .x = surface->rgba.dirty.x0, .y = surface->rgba.dirty.y0,
-			  .width = surface->rgba.dirty.x1 - surface->rgba.dirty.x0,
-			  .height = surface->rgba.dirty.y1 - surface->rgba.dirty.y0 };
-	disp_rect scn = { .x = x + surface->rgba.dirty.x0, .y = y + surface->rgba.dirty.y0,
-			  .width = min_nz(width, surface->rgba.dirty.x1) - surface->rgba.dirty.x0,
-			  .height = min_nz(height, surface->rgba.dirty.y1) - surface->rgba.dirty.y0 };
+	disp_rect src = { .x = surface->rgba_p->dirty.x0, .y = surface->rgba_p->dirty.y0,
+			  .width = surface->rgba_p->dirty.x1 - surface->rgba_p->dirty.x0,
+			  .height = surface->rgba_p->dirty.y1 - surface->rgba_p->dirty.y0 };
+	disp_rect scn = { .x = x + surface->rgba_p->dirty.x0, .y = y + surface->rgba_p->dirty.y0,
+			  .width = min_nz(width, surface->rgba_p->dirty.x1) - surface->rgba_p->dirty.x0,
+			  .height = min_nz(height, surface->rgba_p->dirty.y1) - surface->rgba_p->dirty.y0 };
 
 	clip (&src, &scn, disp->screen_width);
 
-	switch (surface->rgba.format)
+	switch (surface->rgba_p->format)
 	{
 	case VDP_RGBA_FORMAT_R8G8B8A8:
 		disp->osd_config.info.fb.format = DISP_FORMAT_ABGR_8888;
@@ -249,9 +249,9 @@ static int sunxi_disp2_set_osd_layer(struct sunxi_disp *sunxi_disp, int x, int y
 		break;
 	}
 
-	disp->osd_config.info.fb.addr[0] = cedrus_mem_get_phys_addr(surface->rgba.data);
-	disp->osd_config.info.fb.size[0].width = surface->rgba.width;
-	disp->osd_config.info.fb.size[0].height = surface->rgba.height;
+	disp->osd_config.info.fb.addr[0] = cedrus_mem_get_phys_addr(surface->rgba_p->data);
+	disp->osd_config.info.fb.size[0].width = surface->rgba_p->width;
+	disp->osd_config.info.fb.size[0].height = surface->rgba_p->height;
 	disp->osd_config.info.fb.align[0] = 1;
 	disp->osd_config.info.fb.crop.x = (unsigned long long)(src.x) << 32;
 	disp->osd_config.info.fb.crop.y = (unsigned long long)(src.y) << 32;

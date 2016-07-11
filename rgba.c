@@ -25,6 +25,38 @@
 #include "rgba_pixman.h"
 #include "rgba_g2d.h"
 
+static rgba_surface_t *rgba_buffer = NULL;
+
+void rgba_print_value(void *rgba)
+{
+	VDPAU_DBG("ID %d DATA %x RGBA %x",
+			((rgba_surface_t *)rgba)->id,
+			((rgba_surface_t *)rgba)->data,
+			((rgba_surface_t *)rgba));
+}
+
+void rgba_cleanup(void *rgba_p)
+{
+	rgba_surface_t *rgba = (rgba_surface_t *)rgba_p;
+	if (!rgba)
+		return;
+
+	device_ctx_t *dev = rgba->device;
+
+	if (!dev)
+		return;
+
+	if (dev->osd_enabled)
+	{
+		if(!dev->g2d_enabled)
+			vdp_pixman_unref(rgba);
+
+		cedrus_mem_free(rgba->data);
+	}
+
+	sfree(rgba->device);
+}
+
 static void dirty_add_rect(VdpRect *dirty, const VdpRect *rect)
 {
 	dirty->x0 = min(dirty->x0, rect->x0);
@@ -121,11 +153,37 @@ VdpStatus rgba_create(rgba_surface_t *rgba,
                       uint32_t height,
                       VdpRGBAFormat format)
 {
+
 	if (format != VDP_RGBA_FORMAT_B8G8R8A8 && format != VDP_RGBA_FORMAT_R8G8B8A8)
 		return VDP_STATUS_INVALID_RGBA_FORMAT;
 
 	if (width < 1 || width > 8192 || height < 1 || height > 8192)
 		return VDP_STATUS_INVALID_SIZE;
+
+	if (!rgba_buffer)
+	{
+		rgba_buffer = (rgba_surface_t *)calloc(1, sizeof(rgba_surface_t));
+		rgba_buffer->device = sref(device);
+		rgba_buffer->width = width;
+		rgba_buffer->height = height;
+		rgba_buffer->format = format;
+		if (device->osd_enabled)
+		{
+			rgba_buffer->data = cedrus_mem_alloc(device->cedrus, width * height * 4);
+			if (!rgba_buffer->data)
+				return VDP_STATUS_RESOURCES;
+
+			if(!device->g2d_enabled)
+				vdp_pixman_ref(rgba_buffer);
+
+			rgba_buffer->dirty.x0 = width;
+			rgba_buffer->dirty.y0 = height;
+			rgba_buffer->dirty.x1 = 0;
+			rgba_buffer->dirty.y1 = 0;
+			rgba_fill(rgba_buffer, NULL, 0x00000000);
+			rgba_buffer->id = 0;
+		}
+	}
 
 	rgba->device = sref(device);
 	rgba->width = width;
@@ -150,22 +208,6 @@ VdpStatus rgba_create(rgba_surface_t *rgba,
 	}
 
 	return VDP_STATUS_OK;
-}
-
-void rgba_destroy(rgba_surface_t *rgba)
-{
-	if (!rgba->device)
-		return;
-
-	if (rgba->device->osd_enabled)
-	{
-		if(!rgba->device->g2d_enabled)
-			vdp_pixman_unref(rgba);
-
-		cedrus_mem_free(rgba->data);
-	}
-
-	sfree(rgba->device);
 }
 
 VdpStatus rgba_put_bits_native(rgba_surface_t *rgba,
@@ -300,6 +342,7 @@ VdpStatus rgba_render_surface(rgba_surface_t *dest,
 	    d_rect.x0 == d_rect.x1 || d_rect.y0 == d_rect.y1)
 		return VDP_STATUS_OK;
 
+/*
 	if (rgba_changed(dest, destination_rect, src, source_rect, colors, blend_state, flags))
 	{
 		if ((dest->flags & RGBA_FLAG_NEEDS_CLEAR) && !dirty_in_rect(&dest->dirty, &d_rect))
@@ -312,6 +355,21 @@ VdpStatus rgba_render_surface(rgba_surface_t *dest,
 
 		dirty_add_rect(&dest->dirty, &d_rect);
 	}
+*/
+	if (rgba_changed(rgba_buffer, destination_rect, src, source_rect, colors, blend_state, flags))
+	{
+		if ((rgba_buffer->flags & RGBA_FLAG_NEEDS_CLEAR) && !dirty_in_rect(&rgba_buffer->dirty, &d_rect))
+			rgba_clear(rgba_buffer);
+
+		if (!src)
+			rgba_fill(rgba_buffer, &d_rect, 0xffffffff);
+		else
+			rgba_blit(rgba_buffer, &d_rect, src, &s_rect);
+
+		dirty_add_rect(&rgba_buffer->dirty, &d_rect);
+	}
+
+	dest = rgba_buffer;
 
 	dest->flags &= ~RGBA_FLAG_NEEDS_CLEAR;
 	dest->flags |= RGBA_FLAG_DIRTY;
