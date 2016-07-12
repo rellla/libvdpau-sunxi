@@ -25,7 +25,7 @@ static void cleanup_bitmap_surface(void *ptr, void *meta)
 	bitmap_surface_ctx_t *surface = ptr;
 
 	if (surface->rgba_handle)
-		rgba_unref(surface->rgba_handle, surface->device->rgba_cache, rgba_cleanup);
+		item_unref(surface->rgba_handle, surface->device->rgba_cache, rgba_cleanup);
 
 	sfree(surface->device);
 }

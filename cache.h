@@ -15,12 +15,12 @@ typedef struct
 CACHE *cache_create(void);
 void cache_list(CACHE *cache, void(*print_cb)(void *));
 void cache_free(CACHE *cache);
-void rgba_ref(int rgba_handle, CACHE *cache);
-void rgba_unref(int rgba_handle, CACHE *cache, void(*cleanup)(void *));
-void rgba_vis(int rgba_handle, CACHE *cache);
-void rgba_unvis(int rgba_handle, CACHE *cache, void(*cleanup)(void *));
-int slot_get(CACHE *cache, void *rgba_p);
+void item_ref(int item_handle, CACHE *cache);
+void item_unref(int item_handle, CACHE *cache, void(*cleanup)(void *));
+int slot_get(CACHE *cache, void *item_p);
+
 int rgba_get(CACHE *cache, void *rgba_p);
-void *get_visible(CACHE *cache);
+int get_visible(CACHE *cache, void *rgba_p);
+int get_unvisible(CACHE *cache, void *rgba_p);
 
 #endif

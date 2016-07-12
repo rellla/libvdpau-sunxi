@@ -26,7 +26,7 @@ static void cleanup_output_surface(void *ptr, void *meta)
 	output_surface_ctx_t *surface = ptr;
 
 	if (surface->rgba_handle && surface->device->rgba_cache)
-		rgba_unref(surface->rgba_handle, surface->device->rgba_cache, rgba_cleanup);
+		item_unref(surface->rgba_handle, surface->device->rgba_cache, rgba_cleanup);
 
 	if (surface->yuv)
 		yuv_unref(surface->yuv);
@@ -35,6 +35,7 @@ static void cleanup_output_surface(void *ptr, void *meta)
 	sfree(surface->device);
 }
 
+/*
 VdpStatus rgba_prepare(output_surface_ctx_t *out, device_ctx_t *dev)
 {
 	int ret = VDP_STATUS_OK;
@@ -70,6 +71,7 @@ VdpStatus rgba_prepare(output_surface_ctx_t *out, device_ctx_t *dev)
 	}
 	return ret;
 }
+*/
 
 VdpStatus vdp_output_surface_create(VdpDevice device,
                                     VdpRGBAFormat rgba_format,
@@ -101,9 +103,11 @@ VdpStatus vdp_output_surface_create(VdpDevice device,
 
 	out->rgba_handle = slot_get(dev->rgba_cache, rgba);
 	out->rgba = rgba;
-	out->rgba2 = NULL;
-	out->rgba2_handle = -1;
 	cache_list(dev->rgba_cache, rgba_print_value);
+
+	/* Initiate rgba surface which is used to be rendered on and displayed */
+	out->disp_rgba = NULL;
+	out->disp_rgba_handle = 0;
 
 	return handle_create(surface, out);
 }

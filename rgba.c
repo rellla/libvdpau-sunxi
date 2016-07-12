@@ -28,10 +28,10 @@
 
 void rgba_print_value(void *rgba)
 {
-	VDPAU_DBG("ID %d DATA %x RGBA %x",
-			((rgba_surface_t *)rgba)->id,
-			((rgba_surface_t *)rgba)->data,
-			((rgba_surface_t *)rgba));
+	printf(">>> ID %d DATA %x RGBA %x",
+		((rgba_surface_t *)rgba)->id,
+		((rgba_surface_t *)rgba)->data,
+		((rgba_surface_t *)rgba));
 }
 
 void rgba_cleanup(void *rgba_p)
@@ -295,19 +295,12 @@ VdpStatus rgba_render_output_surface(output_surface_ctx_t *out,
 {
 	rgba_surface_t *dest = NULL;
 	rgba_surface_t *src = NULL;
-	rgba_surface_t *dest2 = NULL;
-	rgba_surface_t *src2 = NULL;
 
 	if (out)
-	{
 		dest = out->rgba;
-		dest2 = out->rgba2;
-	}
+
 	if (in)
-	{
 		src = in->rgba;
-		src2 = in->rgba2;
-	}
 
 	if (!dest->device->osd_enabled)
 		return VDP_STATUS_OK;
@@ -331,19 +324,33 @@ VdpStatus rgba_render_output_surface(output_surface_ctx_t *out,
 	    d_rect.x0 == d_rect.x1 || d_rect.y0 == d_rect.y1)
 		return VDP_STATUS_OK;
 
-	rgba_surface_t *visible = (rgba_surface_t *)get_visible(dest->device->rgba2_cache);
+	pthread_mutex_lock(&out->mutex);
+	rgba_surface_t *visible;
+	int handle;
 
+	handle = get_visible(dest->device->disp_rgba_cache, (void *)visible);
 	if (!(visible) || rgba_changed(visible, destination_rect, src, source_rect, colors, blend_state, flags))
 	{
-		rgba_surface_t *rgba_buffer = (rgba_surface_t *)calloc(1, sizeof(rgba_surface_t));
+//		VDPAU_DBG("Rgba changed!");
+		rgba_surface_t *rgba_buffer;
 
-		out->rgba2_handle = rgba_get(dest->device->rgba2_cache, rgba_buffer);
+		handle = get_unvisible(dest->device->disp_rgba_cache, (void *)rgba_buffer);
+		if (!rgba_buffer)
+		{
+			rgba_buffer = (rgba_surface_t *)calloc(1, sizeof(rgba_surface_t));
+			handle = rgba_get(dest->device->disp_rgba_cache, rgba_buffer);
+			VDPAU_DBG("We have no unvisible surface, create new one -> %d", out->disp_rgba_handle);
+		}
+
 		if (!rgba_buffer->data)
+		{
+			VDPAU_DBG("Create buffer rgba");
 			rgba_create(rgba_buffer,
 			    dest->device,
 			    dest->width,
 			    dest->height,
 			    dest->format);
+		}
 
 		if ((rgba_buffer->flags & RGBA_FLAG_NEEDS_CLEAR) && !dirty_in_rect(&rgba_buffer->dirty, &d_rect))
 			rgba_clear(rgba_buffer);
@@ -355,14 +362,20 @@ VdpStatus rgba_render_output_surface(output_surface_ctx_t *out,
 
 		dirty_add_rect(&rgba_buffer->dirty, &d_rect);
 
-		cache_list(rgba_buffer->device->rgba2_cache, rgba_print_value);
-		dest2 = rgba_buffer;
+//		cache_list(rgba_buffer->device->disp_rgba_cache, rgba_print_value);
+		out->disp_rgba_handle = handle;
+		out->disp_rgba = rgba_buffer;
 	}
 	else
-		dest2 = visible;
+	{
+		out->disp_rgba_handle = handle;
+		out->disp_rgba = visible;
+	}
 
-	dest2->flags &= ~RGBA_FLAG_NEEDS_CLEAR;
-	dest2->flags |= RGBA_FLAG_DIRTY;
+	item_ref(out->disp_rgba_handle, out->device->disp_rgba_cache);
+	out->disp_rgba->flags &= ~RGBA_FLAG_NEEDS_CLEAR;
+	out->disp_rgba->flags |= RGBA_FLAG_DIRTY;
+	pthread_mutex_unlock(&out->mutex);
 
 	return VDP_STATUS_OK;
 }
@@ -430,7 +443,7 @@ VdpStatus rgba_render_surface(rgba_surface_t *dest,
 			rgba_buffer = dest;
 		}
 
-		rgba_get(rgba_buffer->device->rgba2_cache, rgba_buffer);
+		rgba_get(rgba_buffer->device->disp_rgba_cache, rgba_buffer);
 
 		if ((rgba_buffer->flags & RGBA_FLAG_NEEDS_CLEAR) && !dirty_in_rect(&rgba_buffer->dirty, &d_rect))
 			rgba_clear(rgba_buffer);
@@ -442,7 +455,7 @@ VdpStatus rgba_render_surface(rgba_surface_t *dest,
 
 		dirty_add_rect(&rgba_buffer->dirty, &d_rect);
 
-		cache_list(rgba_buffer->device->rgba2_cache, rgba_print_value);
+		cache_list(rgba_buffer->device->disp_rgba_cache, rgba_print_value);
 		dest = rgba_buffer;
 	}
 

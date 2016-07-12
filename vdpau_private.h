@@ -53,7 +53,7 @@ typedef struct
 	int g2d_enabled;
 	struct sunxi_disp *disp;
 	CACHE *rgba_cache;
-	CACHE *rgba2_cache;
+	CACHE *disp_rgba_cache;
 } device_ctx_t;
 
 typedef struct
@@ -153,9 +153,9 @@ typedef struct output_surface_ctx_struct
 {
 	device_ctx_t *device;
 	rgba_surface_t *rgba;
-	rgba_surface_t *rgba2;
+	rgba_surface_t *disp_rgba;
 	int rgba_handle;
-	int rgba2_handle;
+	int disp_rgba_handle;
 	video_surface_ctx_t *vs;
 	yuv_data_t *yuv;
 	VdpRect video_src_rect, video_dst_rect;
