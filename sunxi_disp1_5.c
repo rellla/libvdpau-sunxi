@@ -227,14 +227,14 @@ static int sunxi_disp1_5_set_osd_layer(struct sunxi_disp *sunxi_disp, int x, int
 
 	unsigned long args[4] = { 0, disp->osd_layer, (unsigned long)(&disp->osd_info) };
 
-	disp_window src = { .x = surface->rgba_p->dirty.x0, .y = surface->rgba_p->dirty.y0,
-			  .width = surface->rgba_p->dirty.x1 - surface->rgba_p->dirty.x0,
-			  .height = surface->rgba_p->dirty.y1 - surface->rgba_p->dirty.y0 };
-	disp_window scn = { .x = x + surface->rgba_p->dirty.x0, .y = y + surface->rgba_p->dirty.y0,
-			  .width = min_nz(width, surface->rgba_p->dirty.x1) - surface->rgba_p->dirty.x0,
-			  .height = min_nz(height, surface->rgba_p->dirty.y1) - surface->rgba_p->dirty.y0 };
+	disp_window src = { .x = surface->rgba->dirty.x0, .y = surface->rgba->dirty.y0,
+			  .width = surface->rgba->dirty.x1 - surface->rgba->dirty.x0,
+			  .height = surface->rgba->dirty.y1 - surface->rgba->dirty.y0 };
+	disp_window scn = { .x = x + surface->rgba->dirty.x0, .y = y + surface->rgba->dirty.y0,
+			  .width = min_nz(width, surface->rgba->dirty.x1) - surface->rgba->dirty.x0,
+			  .height = min_nz(height, surface->rgba->dirty.y1) - surface->rgba->dirty.y0 };
 
-	switch (surface->rgba_p->format)
+	switch (surface->rgba->format)
 	{
 	case VDP_RGBA_FORMAT_R8G8B8A8:
 		disp->osd_info.fb.format = DISP_FORMAT_ABGR_8888;
@@ -245,9 +245,9 @@ static int sunxi_disp1_5_set_osd_layer(struct sunxi_disp *sunxi_disp, int x, int
 		break;
 	}
 
-	disp->osd_info.fb.addr[0] = cedrus_mem_get_phys_addr(surface->rgba_p->data);
-	disp->osd_info.fb.size.width = surface->rgba_p->width;
-	disp->osd_info.fb.size.height = surface->rgba_p->height;
+	disp->osd_info.fb.addr[0] = cedrus_mem_get_phys_addr(surface->rgba->data);
+	disp->osd_info.fb.size.width = surface->rgba->width;
+	disp->osd_info.fb.size.height = surface->rgba->height;
 	disp->osd_info.fb.src_win = src;
 	disp->osd_info.screen_win = scn;
 

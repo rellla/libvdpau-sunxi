@@ -293,12 +293,12 @@ static VdpStatus do_presentation_queue_display(queue_ctx_t *q, task_t *task)
 	if (!q->device->osd_enabled)
 		return VDP_STATUS_OK;
 
-	if (os->rgba_p->flags & RGBA_FLAG_NEEDS_CLEAR)
-		rgba_clear(os->rgba_p);
+	if (os->rgba->flags & RGBA_FLAG_NEEDS_CLEAR)
+		rgba_clear(os->rgba);
 
-	if (os->rgba_p->flags & RGBA_FLAG_DIRTY)
+	if (os->rgba->flags & RGBA_FLAG_DIRTY)
 	{
-		rgba_flush(os->rgba_p);
+		rgba_flush(os->rgba);
 		q->target->disp->set_osd_layer(q->target->disp, q->target->x, q->target->y, clip_width, clip_height, os);
 	}
 	else

@@ -104,23 +104,17 @@ void rgba_unvis(int rgba_handle, CACHE *cache, void(*cleanup)(void *))
 	}
 }
 
-int rgba_get(CACHE *cache, void *rgba_p)
+int rgba_get(CACHE *cache, void *rgba)
 {
 	int index;
-	item *data = calloc(1, sizeof(rgba_p));
+	item *data = calloc(1, sizeof(rgba));
 	if (data == NULL)
 		return -1;
 
-	printf("Get free rgba slot for %x\n", rgba_p);
 	for (index = 0; index < cache->size; index++)
-		if ((cache->data[index] == NULL) || 
-		    ((cache->data[index]->refcount < 2) // && 
-		    )
-//		    ((((rgba_surface_t *)cache->data[index]->itemdata)->flags & RGBA_FLAG_VISIBLE) != 0))
-		    )
-//		if ((cache->data[index]->refcount <= 1))
+		if ((cache->data[index] == NULL) || (cache->data[index]->refcount < 2))
 		{
-			printf("Found rgba slot on index %d\n", index);
+			printf("Found rgba (%x) slot on index %d\n", rgba, index);
 			break;
 		}
 
@@ -138,8 +132,7 @@ int rgba_get(CACHE *cache, void *rgba_p)
 	}
 
 	data->refcount = 1;
-	data->itemdata = rgba_p;
-	printf("rgba Found slot for %x -> %d\n", rgba_p,  index);
+	data->itemdata = rgba;
 
 	cache->data[index] = data;
 
@@ -160,14 +153,14 @@ void *get_visible(CACHE *cache)
 	return NULL;
 }
 
-int slot_get(CACHE *cache, void *rgba_p)
+int slot_get(CACHE *cache, void *rgba)
 {
 	int index;
-	item *data = calloc(1, sizeof(rgba_p));
+	item *data = calloc(1, sizeof(rgba));
 	if (data == NULL)
 		return -1;
 
-	printf("Get free slot for %x\n", rgba_p);
+	printf("Get free slot for %x\n", rgba);
 	for (index = 0; index < cache->size; index++)
 		if (cache->data[index] == NULL)
 			break;
@@ -186,8 +179,8 @@ int slot_get(CACHE *cache, void *rgba_p)
 	}
 
 	data->refcount++;
-	data->itemdata = rgba_p;
-	printf("Found slot for %x -> %d\n", rgba_p,  index);
+	data->itemdata = rgba;
+	printf("Found slot for %x -> %d\n", rgba,  index);
 
 	cache->data[index] = data;
 

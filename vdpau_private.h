@@ -152,8 +152,8 @@ typedef struct
 typedef struct output_surface_ctx_struct
 {
 	device_ctx_t *device;
-	rgba_surface_t *rgba_p;
-	rgba_surface_t *rgba2_p;
+	rgba_surface_t *rgba;
+	rgba_surface_t *rgba2;
 	int rgba_handle;
 	int rgba2_handle;
 	video_surface_ctx_t *vs;
@@ -174,7 +174,7 @@ typedef struct output_surface_ctx_struct
 typedef struct
 {
 	device_ctx_t *device;
-	rgba_surface_t *rgba_p;
+	rgba_surface_t *rgba;
 	int rgba_handle;
 	VdpBool frequently_accessed;
 } bitmap_surface_ctx_t;

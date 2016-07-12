@@ -300,13 +300,13 @@ VdpStatus rgba_render_output_surface(output_surface_ctx_t *out,
 
 	if (out)
 	{
-		dest = out->rgba_p;
-		dest2 = out->rgba2_p;
+		dest = out->rgba;
+		dest2 = out->rgba2;
 	}
 	if (in)
 	{
-		src = in->rgba_p;
-		src2 = in->rgba2_p;
+		src = in->rgba;
+		src2 = in->rgba2;
 	}
 
 	if (!dest->device->osd_enabled)
