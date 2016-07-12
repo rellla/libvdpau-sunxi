@@ -53,6 +53,7 @@ typedef struct
 	int g2d_enabled;
 	struct sunxi_disp *disp;
 	CACHE *rgba_cache;
+	CACHE *rgba2_cache;
 } device_ctx_t;
 
 typedef struct
@@ -124,6 +125,7 @@ typedef struct
 #define RGBA_FLAG_DIRTY (1 << 0)
 #define RGBA_FLAG_NEEDS_FLUSH (1 << 1)
 #define RGBA_FLAG_NEEDS_CLEAR (1 << 2)
+#define RGBA_FLAG_VISIBLE (1 << 3)
 
 typedef struct
 {
@@ -151,7 +153,9 @@ typedef struct output_surface_ctx_struct
 {
 	device_ctx_t *device;
 	rgba_surface_t *rgba_p;
+	rgba_surface_t *rgba2_p;
 	int rgba_handle;
+	int rgba2_handle;
 	video_surface_ctx_t *vs;
 	yuv_data_t *yuv;
 	VdpRect video_src_rect, video_dst_rect;

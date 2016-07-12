@@ -52,6 +52,14 @@ VdpStatus rgba_render_surface(rgba_surface_t *dest,
                               VdpOutputSurfaceRenderBlendState const *blend_state,
                               uint32_t flags);
 
+VdpStatus rgba_render_output_surface(output_surface_ctx_t *dest,
+                              VdpRect const *destination_rect,
+                              output_surface_ctx_t *src,
+                              VdpRect const *source_rect,
+                              VdpColor const *colors,
+                              VdpOutputSurfaceRenderBlendState const *blend_state,
+                              uint32_t flags);
+
 void rgba_clear(rgba_surface_t *rgba);
 void rgba_fill(rgba_surface_t *dest, const VdpRect *dest_rect, uint32_t color);
 void rgba_blit(rgba_surface_t *dest, const VdpRect *dest_rect, rgba_surface_t *src, const VdpRect *src_rect);

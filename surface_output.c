@@ -102,6 +102,8 @@ VdpStatus vdp_output_surface_create(VdpDevice device,
 
 	out->rgba_handle = slot_get(dev->rgba_cache, rgba_p);
 	out->rgba_p = rgba_p;
+	out->rgba2_p = NULL;
+	out->rgba2_handle = -1;
 	cache_list(dev->rgba_cache, rgba_print_value);
 
 	return handle_create(surface, out);
@@ -149,7 +151,7 @@ VdpStatus vdp_output_surface_put_bits_native(VdpOutputSurface surface,
 	if (!out)
 		return VDP_STATUS_INVALID_HANDLE;
 
-	rgba_prepare(out, out->device);
+//	rgba_prepare(out, out->device);
 
 	return rgba_put_bits_native(out->rgba_p, source_data, source_pitches, destination_rect);
 }
@@ -166,7 +168,7 @@ VdpStatus vdp_output_surface_put_bits_indexed(VdpOutputSurface surface,
 	if (!out)
 		return VDP_STATUS_INVALID_HANDLE;
 
-	rgba_prepare(out, out->device);
+//	rgba_prepare(out, out->device);
 
 	return rgba_put_bits_indexed(out->rgba_p, source_indexed_format, source_data, source_pitch,
 					destination_rect, color_table_format, color_table);
@@ -183,7 +185,7 @@ VdpStatus vdp_output_surface_put_bits_y_cb_cr(VdpOutputSurface surface,
 	if (!out)
 		return VDP_STATUS_INVALID_HANDLE;
 
-	rgba_prepare(out, out->device);
+//	rgba_prepare(out, out->device);
 
 	return VDP_STATUS_ERROR;
 }
@@ -202,7 +204,7 @@ VdpStatus vdp_output_surface_render_output_surface(VdpOutputSurface destination_
 
 	smart output_surface_ctx_t *in = handle_get(source_surface);
 
-	return rgba_render_surface(out->rgba_p, destination_rect, in ? in->rgba_p : NULL, source_rect,
+	return rgba_render_output_surface(out, destination_rect, in ? in : NULL, source_rect,
 					colors, blend_state, flags);
 }
 

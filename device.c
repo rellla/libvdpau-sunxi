@@ -29,6 +29,7 @@ static void cleanup_device(void *ptr, void *meta)
 	device_ctx_t *device = ptr;
 
 	cache_free(device->rgba_cache);
+	cache_free(device->rgba2_cache);
 
 	if (device->g2d_enabled)
 		close(device->g2d_fd);
@@ -106,6 +107,7 @@ VdpStatus vdp_imp_device_create_x11(Display *display,
 
 	/* Build cache for rgba surfaces */ 
 	dev->rgba_cache = cache_create();
+	dev->rgba2_cache = cache_create();
 
 	return handle_create(device, dev);
 }

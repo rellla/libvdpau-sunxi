@@ -17,6 +17,10 @@ void cache_list(CACHE *cache, void(*print_cb)(void *));
 void cache_free(CACHE *cache);
 void rgba_ref(int rgba_handle, CACHE *cache);
 void rgba_unref(int rgba_handle, CACHE *cache, void(*cleanup)(void *));
+void rgba_vis(int rgba_handle, CACHE *cache);
+void rgba_unvis(int rgba_handle, CACHE *cache, void(*cleanup)(void *));
 int slot_get(CACHE *cache, void *rgba_p);
+int rgba_get(CACHE *cache, void *rgba_p);
+void *get_visible(CACHE *cache);
 
 #endif

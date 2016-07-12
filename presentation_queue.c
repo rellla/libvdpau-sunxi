@@ -379,7 +379,9 @@ static void *presentation_thread(void *param)
 			{
 				os_cur->first_presentation_time = lastvsync;
 				os_cur->status = VDP_PRESENTATION_QUEUE_STATUS_VISIBLE;
-				rgba_ref(os_cur->rgba_handle, os_cur->device->rgba_cache);
+//				rgba_ref(os_cur->rgba_handle, os_cur->device->rgba_cache);
+				if (os_cur->rgba2_handle >= 0 && os_cur->device->rgba2_cache)
+					rgba_vis(os_cur->rgba2_handle, os_cur->device->rgba2_cache);
 			}
 
 			if (os_prev)
@@ -390,8 +392,11 @@ static void *presentation_thread(void *param)
 				sfree(os_prev->vs);
 				os_prev->vs = NULL;
 
-				if (os_prev->rgba_p)
-					rgba_unref(os_prev->rgba_handle, os_prev->device->rgba_cache, rgba_cleanup);
+				if (os_prev->rgba2_handle >= 0 && os_prev->device->rgba2_cache)
+				{
+//					rgba_unref(os_prev->rgba_handle, os_prev->device->rgba_cache, rgba_cleanup);
+					rgba_unvis(os_prev->rgba2_handle, os_prev->device->rgba2_cache, rgba_cleanup);
+				}
 
 				pthread_mutex_lock(&os_prev->mutex);
 				if (os_prev->status != VDP_PRESENTATION_QUEUE_STATUS_IDLE)
