@@ -20,7 +20,9 @@ void item_unref(int item_handle, CACHE *cache, void(*cleanup)(void *));
 int slot_get(CACHE *cache, void *item_p);
 
 int rgba_get(CACHE *cache, void *rgba_p);
-int get_visible(CACHE *cache, void *rgba_p);
-int get_unvisible(CACHE *cache, void *rgba_p);
+int get_visible(CACHE *cache, void **rgba_p);
+int get_unvisible(CACHE *cache, void **rgba_p);
+void rgba_ref(int item_handle, CACHE *cache);
+void rgba_unref(int item_handle, CACHE *cache);
 
 #endif

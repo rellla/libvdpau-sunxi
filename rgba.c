@@ -51,6 +51,7 @@ void rgba_cleanup(void *rgba_p)
 			vdp_pixman_unref(rgba);
 
 		cedrus_mem_free(rgba->data);
+		rgba->data = NULL;
 	}
 
 	sfree(rgba->device);
@@ -146,6 +147,23 @@ static int rgba_changed(rgba_surface_t *dest,
 	return 1;
 }
 
+static int rgba_changed2(rgba_surface_t *dest, rgba_surface_t *src)
+{
+	if (!dest && !src)
+		return 0;
+
+	int id = -1;
+	if (src)
+		id = src->id;
+
+	if ((!dest && src) ||
+	    (dest && !src) ||
+	    (dest->id < id))
+		return 1;
+
+	return 0;
+}
+
 VdpStatus rgba_create(rgba_surface_t *rgba,
                       device_ctx_t *device,
                       uint32_t width,
@@ -219,6 +237,7 @@ VdpStatus rgba_put_bits_native(rgba_surface_t *rgba,
 	dirty_add_rect(&rgba->dirty, &d_rect);
 
 	rgba->id++;
+	VDPAU_DBG("putbitsnative %d", rgba->id++);
 
 	return VDP_STATUS_OK;
 }
@@ -325,54 +344,147 @@ VdpStatus rgba_render_output_surface(output_surface_ctx_t *out,
 		return VDP_STATUS_OK;
 
 	pthread_mutex_lock(&out->mutex);
-	rgba_surface_t *visible;
+
 	int handle;
-
-	handle = get_visible(dest->device->disp_rgba_cache, (void *)visible);
-	if (!(visible) || rgba_changed(visible, destination_rect, src, source_rect, colors, blend_state, flags))
+	rgba_surface_t *rgba_tmp;
+//	cache_list(src->device->disp_rgba_cache, rgba_print_value);
+//	VDPAU_DBG("0: rgba %x %d", rgba_tmp, handle);
+	/* Check for visible surface */
+//	handle = get_visible(dest->device->disp_rgba_cache, rgba_tmp);
+	handle = get_visible(dest->device->disp_rgba_cache, &rgba_tmp);
+//	handle = get_visible(dest->device->disp_rgba_cache, (void *)rgba_tmp);
+//	VDPAU_DBG("1: rgba %x %d", (void *)rgba_tmp, handle);
+	if (!(handle))
 	{
-//		VDPAU_DBG("Rgba changed!");
-		rgba_surface_t *rgba_buffer;
-
-		handle = get_unvisible(dest->device->disp_rgba_cache, (void *)rgba_buffer);
-		if (!rgba_buffer)
+		VDPAU_DBG("Visible not exists");
+		/* We have no rgba surface, that is actually on screen,
+		 * so we needn't check, if it changed
+		 * Try to get an invisible surface or create a new one
+		 */
+		handle = get_unvisible(dest->device->disp_rgba_cache, &rgba_tmp);
+//		handle = get_unvisible(dest->device->disp_rgba_cache, (void *)rgba_tmp);
+		if (!handle)
 		{
-			rgba_buffer = (rgba_surface_t *)calloc(1, sizeof(rgba_surface_t));
-			handle = rgba_get(dest->device->disp_rgba_cache, rgba_buffer);
-			VDPAU_DBG("We have no unvisible surface, create new one -> %d", out->disp_rgba_handle);
-		}
-
-		if (!rgba_buffer->data)
-		{
-			VDPAU_DBG("Create buffer rgba");
-			rgba_create(rgba_buffer,
+			/* We have no free rgba surface, that is actually not on screen,
+			 * so we need to create a new one
+			 */
+			rgba_tmp = (rgba_surface_t *)calloc(1, sizeof(rgba_surface_t));
+			rgba_create(rgba_tmp,
 			    dest->device,
 			    dest->width,
 			    dest->height,
 			    dest->format);
+			handle = rgba_get(dest->device->disp_rgba_cache, rgba_tmp);
+			VDPAU_DBG("Invisible not exists, created new one %x -> %d", rgba_tmp, handle);
+		}
+		else
+		{
+			if (!rgba_tmp)
+			{
+				rgba_tmp = (rgba_surface_t *)calloc(1, sizeof(rgba_surface_t));
+				rgba_create(rgba_tmp,
+				    dest->device,
+				    dest->width,
+				    dest->height,
+				    dest->format);
+				VDPAU_DBG("Got an invisible surface, but needed to create rbga_tmp");
+			}
+
+			VDPAU_DBG("Invisible exists, use it %x -> %d", rgba_tmp, handle);
+			/* We have a free rgba surface, that is actually not on screen,
+			 * so use that:
+			 * -> handle and -> rgba_tmp
+			 */
 		}
 
-		if ((rgba_buffer->flags & RGBA_FLAG_NEEDS_CLEAR) && !dirty_in_rect(&rgba_buffer->dirty, &d_rect))
-			rgba_clear(rgba_buffer);
-
-		if (!src)
-			rgba_fill(rgba_buffer, &d_rect, 0xffffffff);
+		/* Do the blit/fill, because we have a change */
+		if ((rgba_tmp->flags & RGBA_FLAG_NEEDS_CLEAR) && !dirty_in_rect(&rgba_tmp->dirty, &d_rect))
+			rgba_clear(rgba_tmp);
+			if (!src)
+			rgba_fill(rgba_tmp, &d_rect, 0xffffffff);
 		else
-			rgba_blit(rgba_buffer, &d_rect, src, &s_rect);
+		{
+			VDPAU_DBG("blit rgba buffer: %x", rgba_tmp);
+			rgba_blit(rgba_tmp, &d_rect, src, &s_rect);
+			rgba_tmp->id = src->id;
+			cache_list(src->device->disp_rgba_cache, rgba_print_value);
+		}
 
-		dirty_add_rect(&rgba_buffer->dirty, &d_rect);
-
-//		cache_list(rgba_buffer->device->disp_rgba_cache, rgba_print_value);
-		out->disp_rgba_handle = handle;
-		out->disp_rgba = rgba_buffer;
+		dirty_add_rect(&rgba_tmp->dirty, &d_rect);
 	}
 	else
 	{
-		out->disp_rgba_handle = handle;
-		out->disp_rgba = visible;
+//		VDPAU_DBG("Visible exists");
+		/* We have a rgba surface, that is actually on screen,
+		 * so we can check, if it changed
+		 */
+//		if (rgba_changed(rgba_tmp, destination_rect, src, source_rect, colors, blend_state, flags))
+		if (rgba_changed2(rgba_tmp, src))
+		{
+			/* Yeah, it changed, so we need to check if we can get a cache item,
+			 * that has an invisible surface
+			 */
+			VDPAU_DBG("Rect changed");
+			handle = get_unvisible(dest->device->disp_rgba_cache, &rgba_tmp);
+//			handle = get_unvisible(dest->device->disp_rgba_cache, (void *)rgba_tmp);
+			if (!handle)
+			{
+				/* We have no free rgba surface, that is actually not on screen,
+				 * so we need to create a new one
+				 */
+				rgba_tmp = (rgba_surface_t *)calloc(1, sizeof(rgba_surface_t));
+				rgba_create(rgba_tmp,
+				    dest->device,
+				    dest->width,
+				    dest->height,
+				    dest->format);
+				handle = rgba_get(dest->device->disp_rgba_cache, rgba_tmp);
+				VDPAU_DBG("Invisible not exists, created new one -> %d", handle);
+			}
+			else
+			{
+//				VDPAU_DBG("Invisible exists -> %d", handle);
+				/* We have a free rgba surface, that is actually not on screen,
+				 * so use that:
+				 * -> handle and -> rgba_buffer
+				 */
+			}
+
+			/* Do the blit/fill, because we have a change */
+			if ((rgba_tmp->flags & RGBA_FLAG_NEEDS_CLEAR) && !dirty_in_rect(&rgba_tmp->dirty, &d_rect))
+				rgba_clear(rgba_tmp);
+
+			if (!src)
+				rgba_fill(rgba_tmp, &d_rect, 0xffffffff);
+			else
+			{
+				VDPAU_DBG("blit rgba buffer: %x", rgba_tmp);
+				rgba_blit(rgba_tmp, &d_rect, src, &s_rect);
+				rgba_tmp->id = src->id;
+				cache_list(src->device->disp_rgba_cache, rgba_print_value);
+			}
+
+			dirty_add_rect(&rgba_tmp->dirty, &d_rect);
+		}
+		else
+		{
+//			VDPAU_DBG("No change, use %d: %x", handle, rgba_tmp);
+			/* Yeah, it hasn't changed, so we need to do nothing, 
+			 * just use the *rgba_tmp and handle.
+			 */
+		}
 	}
 
-	item_ref(out->disp_rgba_handle, out->device->disp_rgba_cache);
+	/* We should have rgba_tmp and handle at this point. */
+//	VDPAU_DBG("Using rgba %d: %x", handle, rgba_tmp);
+//	VDPAU_DBG("_______________________");
+
+
+//	cache_list(rgba_buffer->device->disp_rgba_cache, rgba_print_value);
+	out->disp_rgba_handle = handle;
+	out->disp_rgba = rgba_tmp;
+
+//	rgba_ref(out->disp_rgba_handle, out->device->disp_rgba_cache);
 	out->disp_rgba->flags &= ~RGBA_FLAG_NEEDS_CLEAR;
 	out->disp_rgba->flags |= RGBA_FLAG_DIRTY;
 	pthread_mutex_unlock(&out->mutex);

@@ -45,7 +45,7 @@ void cache_list(CACHE *cache, void(*print_cb)(void *))
 	printf("\n");
 	for (index = 0; index < cache->size; index++)
 		if (cache->data[index] == NULL)
-			printf(">>> [%d @ %x] NULL\n", index, cache->data[index]);
+			printf(">>> [%d(%d) @ %x] NULL\n", index, index + 1, cache->data[index]);
 		else
 		{
 			printf(">>> [%d @ %x] ", index, cache->data[index]);
@@ -63,15 +63,41 @@ void item_ref(int item_handle, CACHE *cache)
 
 void item_unref(int item_handle, CACHE *cache, void(*cleanup)(void *))
 {
+//	if (cache->data[item_handle - 1] == NULL)
+//		return;
+
+//	printf("unreference item %d in slot %d : %d\n", item_handle, item_handle - 1, cache->data[item_handle - 1]->refcount);
 	cache->data[item_handle - 1]->refcount--;
 //	printf("Unreference item %d in slot %d (%d)\n", item_handle, item_handle - 1, cache->data[item_handle - 1]->refcount);
 
 	if (cache->data[item_handle - 1]->refcount == 0)
 	{
-		cleanup(cache->data[item_handle - 1]);
-		free(cache->data[item_handle - 1]);
-		cache->data[item_handle - 1] = NULL;
+		cleanup(cache->data[item_handle - 1]->itemdata);
+//		free(cache->data[item_handle - 1]);
+//		cache->data[item_handle - 1] = NULL;
 		printf("Deleted item\n");
+	}
+}
+
+void rgba_ref(int item_handle, CACHE *cache)
+{
+	if (cache->data[item_handle - 1] == NULL)
+		return;
+
+	cache->data[item_handle - 1]->refcount++;
+//	printf("Reference item %d in slot %d (%d)\n", item_handle, item_handle -1, cache->data[item_handle - 1]->refcount);
+}
+
+
+void rgba_unref(int item_handle, CACHE *cache)
+{
+	if (cache->data[item_handle - 1] == NULL)
+		return;
+
+	if (cache->data[item_handle -1]->refcount > 1)
+	{
+//		printf("unreference item %d in slot %d : %d\n", item_handle, item_handle - 1, cache->data[item_handle - 1]->refcount);
+		cache->data[item_handle - 1]->refcount--;
 	}
 }
 
@@ -138,43 +164,42 @@ int rgba_get(CACHE *cache, void *rgba)
 
 	data->refcount++;
 	data->itemdata = rgba;
+	printf("itemdata: %x, rgba: %x\n", data->itemdata, rgba);
 
 	cache->data[index] = data;
 
 	return index + 1;
 }
 
-int get_visible(CACHE *cache, void *item_p)
+int get_visible(CACHE *cache, void **item_p)
 {
 	int index;
-//	printf("Search for visible surface...\n");
 	for (index = 0; index < cache->size; index++)
-		if (cache->data[index]->refcount > 1)
-//		if ((((rgba_surface_t *)cache->data[index]->itemdata)->flags & RGBA_FLAG_VISIBLE) != 0)
+	{
+		if (cache->data[index] && (cache->data[index]->refcount > 1) && (cache->data[index]->itemdata != NULL))
 		{
-//			printf("Found visible surface on index %d\n", index);
-			item_p = (void *)cache->data[index]->itemdata;
-			return index;
+			*item_p = cache->data[index]->itemdata;
+//			printf("Found visible surface %x on index %d\n", cache->data[index]->itemdata, index);
+			return index + 1;
 		}
+	}
 
-	item_p = NULL;
+	printf("No visible surface found\n");
 	return 0;
 }
 
-int get_unvisible(CACHE *cache, void *item_p)
+int get_unvisible(CACHE *cache, void **item_p)
 {
 	int index;
-//	printf("Search for unvisible surface...\n");
 	for (index = 0; index < cache->size; index++)
-		if (cache->data[index]->refcount <= 1)
-//		if ((((rgba_surface_t *)cache->data[index]->itemdata)->flags & RGBA_FLAG_VISIBLE) == 0)
+		if (cache->data[index] && (cache->data[index]->refcount <= 1))
 		{
-			printf("Found unvisible surface on index %d\n", index);
-			item_p = (void *)cache->data[index]->itemdata;
-			return index;
+			if (cache->data[index]->itemdata != NULL)
+				*item_p = cache->data[index]->itemdata;
+			printf("Found unvisible surface %x on index %d\n", cache->data[index]->itemdata, index);
+			return index + 1;
 		}
 
-	item_p = NULL;
+	printf("No invisible surface found\n");
 	return 0;
 }
-
