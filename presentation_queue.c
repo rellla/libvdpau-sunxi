@@ -381,12 +381,7 @@ static void *presentation_thread(void *param)
 				os_cur->status = VDP_PRESENTATION_QUEUE_STATUS_VISIBLE;
 				pthread_mutex_lock(&os_cur->mutex);
 				if (os_cur->disp_rgba_handle > 0 && os_cur->device->disp_rgba_cache)
-				{
-					if (!os_cur->disp_rgba)
-						VDPAU_DBG("No disp_rgba");
 					rgba_ref(os_cur->disp_rgba_handle, os_cur->device->disp_rgba_cache);
-//					os_cur->disp_rgba->flags |= RGBA_FLAG_VISIBLE;
-				}
 				pthread_mutex_unlock(&os_cur->mutex);
 			}
 
@@ -400,13 +395,8 @@ static void *presentation_thread(void *param)
 
 				pthread_mutex_lock(&os_prev->mutex);
 				if (os_prev->disp_rgba_handle > 0 && os_prev->device->disp_rgba_cache)
-				{
 					rgba_unref(os_prev->disp_rgba_handle, os_prev->device->disp_rgba_cache);
-//					os_prev->disp_rgba->flags &= ~RGBA_FLAG_VISIBLE;
-				}
-				pthread_mutex_unlock(&os_prev->mutex);
 
-				pthread_mutex_lock(&os_prev->mutex);
 				if (os_prev->status != VDP_PRESENTATION_QUEUE_STATUS_IDLE)
 				{
 					os_prev->status = VDP_PRESENTATION_QUEUE_STATUS_IDLE;
