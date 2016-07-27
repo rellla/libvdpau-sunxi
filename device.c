@@ -54,7 +54,8 @@ VdpStatus vdp_imp_device_create_x11(Display *display,
 	if (!dev->cedrus)
 		return VDP_STATUS_ERROR;
 
-	VDPAU_DBG("VE version 0x%04x opened", cedrus_get_ve_version(dev->cedrus));
+	VDPAU_DBG("libvdpau-sunxi version: %s", VERSION);
+	VDPAU_DBG("VE hardware version 0x%04x opened", cedrus_get_ve_version(dev->cedrus));
 	*get_proc_address = vdp_get_proc_address;
 
 	char *env_vdpau_osd = getenv("VDPAU_OSD");
