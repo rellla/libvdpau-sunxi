@@ -1,3 +1,12 @@
+VERSION = 0
+PATCHLEVEL = 4
+SUBLEVEL =
+EXTRAVERSION =
+ifneq (, $(shell which git))
+GIT_COMMIT := -$(shell git describe --abbrev=7 --dirty --always)
+endif
+VERSION_STRING = $(VERSION)$(if $(PATCHLEVEL),.$(PATCHLEVEL)$(if $(SUBLEVEL),.$(SUBLEVEL)))$(EXTRAVERSION)$(GIT_COMMIT)
+
 TARGET = libvdpau_sunxi.so.1
 SRC = device.c presentation_queue.c surface_output.c surface_video.c \
 	surface_bitmap.c video_mixer.c decoder.c handles.c \
@@ -5,6 +14,7 @@ SRC = device.c presentation_queue.c surface_output.c surface_video.c \
 	sunxi_disp2.c sunxi_disp1_5.c rgba_g2d.c rgba_pixman.c queue.c \
 	xevents.c 
 CFLAGS ?= -Wall -O3 -std=gnu99
+CFLAGS += -DVERSION=\"$(VERSION_STRING)\"
 LDFLAGS ?=
 LIBS = -lrt -lm -lX11 -lpthread -lcedrus -lcsptr
 CC ?= gcc
