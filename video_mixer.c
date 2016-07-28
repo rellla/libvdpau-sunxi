@@ -77,13 +77,10 @@ VdpStatus vdp_video_mixer_render(VdpVideoMixer mixer,
 		return VDP_STATUS_INVALID_HANDLE;
 
 	if (background_surface != VDP_INVALID_HANDLE)
-		VDPAU_DBG_ONCE("Requested unimplemented background_surface");
-
+		VDPAU_LOG(LDBG, "Requested unimplemented background_surface");
 
 	if (current_picture_structure != VDP_VIDEO_MIXER_PICTURE_STRUCTURE_FRAME)
-		VDPAU_DBG_ONCE("Requested unimplemented picture_structure");
-
-
+		VDPAU_LOG(LDBG, "Requested unimplemented picture_structure");
 
 	output_surface_ctx_t *os = handle_get(destination_surface);
 	if (!os)
@@ -130,8 +127,7 @@ VdpStatus vdp_video_mixer_render(VdpVideoMixer mixer,
 		os->rgba.flags |= RGBA_FLAG_NEEDS_CLEAR;
 
 	if (layer_count != 0)
-		VDPAU_DBG_ONCE("Requested unimplemented additional layers");
-
+		VDPAU_LOG(LDBG, "Requested unimplemented additional layers");
 
 	return VDP_STATUS_OK;
 }
@@ -151,7 +147,6 @@ VdpStatus vdp_video_mixer_get_feature_support(VdpVideoMixer mixer,
 	if (!mix)
 		return VDP_STATUS_INVALID_HANDLE;
 
-
 	return VDP_STATUS_ERROR;
 }
 
@@ -170,7 +165,6 @@ VdpStatus vdp_video_mixer_set_feature_enables(VdpVideoMixer mixer,
 	if (!mix)
 		return VDP_STATUS_INVALID_HANDLE;
 
-
 	return VDP_STATUS_OK;
 }
 
@@ -185,7 +179,6 @@ VdpStatus vdp_video_mixer_get_feature_enables(VdpVideoMixer mixer,
 	mixer_ctx_t *mix = handle_get(mixer);
 	if (!mix)
 		return VDP_STATUS_INVALID_HANDLE;
-
 
 	return VDP_STATUS_ERROR;
 }
@@ -257,7 +250,6 @@ VdpStatus vdp_video_mixer_get_attribute_values(VdpVideoMixer mixer,
 	mixer_ctx_t *mix = handle_get(mixer);
 	if (!mix)
 		return VDP_STATUS_INVALID_HANDLE;
-
 
 	return VDP_STATUS_ERROR;
 }

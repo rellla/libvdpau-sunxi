@@ -23,6 +23,8 @@
 #include <cedrus/cedrus.h>
 #include "vdpau_private.h"
 
+extern int LOGLEVEL;
+
 VdpStatus vdp_imp_device_create_x11(Display *display,
                                     int screen,
                                     VdpDevice *device,
@@ -46,7 +48,14 @@ VdpStatus vdp_imp_device_create_x11(Display *display,
 		return VDP_STATUS_ERROR;
 	}
 
-	VDPAU_DBG("VE version 0x%04x opened", cedrus_get_ve_version(dev->cedrus));
+	/* Set the global LOGLEVEL variable via environment variable VDPAU_LOGLEVEL from 0-6 */
+	char *env_vdpau_loglevel = getenv("VDPAU_LOGLEVEL");
+	if (env_vdpau_loglevel &&
+	    ((atoi(env_vdpau_loglevel) >= LNONE) &&
+	     (atoi(env_vdpau_loglevel) <= LALL)))
+		LOGLEVEL = atoi(env_vdpau_loglevel);
+
+	VDPAU_LOG(LINFO, "VE version 0x%04x opened", cedrus_get_ve_version(dev->cedrus));
 	*get_proc_address = vdp_get_proc_address;
 
 	char *env_vdpau_osd = getenv("VDPAU_OSD");
@@ -55,7 +64,7 @@ VdpStatus vdp_imp_device_create_x11(Display *display,
 		dev->osd_enabled = 1;
 	else
 	{
-		VDPAU_DBG("OSD disabled!");
+		VDPAU_LOG(LWARN, "OSD disabled!");
 		return VDP_STATUS_OK;
 	}
 
@@ -65,12 +74,12 @@ VdpStatus vdp_imp_device_create_x11(Display *display,
 		if (dev->g2d_fd != -1)
 		{
 			dev->g2d_enabled = 1;
-			VDPAU_DBG("OSD enabled, using G2D!");
+			VDPAU_LOG(LINFO, "OSD enabled, using G2D!");
 		}
 	}
 
 	if (!dev->g2d_enabled)
-		VDPAU_DBG("OSD enabled, using pixman");
+		VDPAU_LOG(LINFO, "OSD enabled, using pixman");
 
 	return VDP_STATUS_OK;
 }

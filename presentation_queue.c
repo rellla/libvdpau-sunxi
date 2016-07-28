@@ -180,7 +180,7 @@ VdpStatus vdp_presentation_queue_display(VdpPresentationQueue presentation_queue
 		return VDP_STATUS_INVALID_HANDLE;
 
 	if (earliest_presentation_time != 0)
-		VDPAU_DBG_ONCE("Presentation time not supported");
+		VDPAU_LOG(LDBG, "Presentation time not supported");
 
 	Window c;
 	int x,y;
