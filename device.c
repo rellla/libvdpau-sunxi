@@ -24,6 +24,8 @@
 #include "vdpau_private.h"
 #include "sunxi_disp.h"
 
+extern int LOGLEVEL;
+
 static void cleanup_device(void *ptr, void *meta)
 {
 	device_ctx_t *device = ptr;
@@ -32,7 +34,7 @@ static void cleanup_device(void *ptr, void *meta)
 		close(device->g2d_fd);
 	cedrus_close(device->cedrus);
 	XCloseDisplay(device->display);
-	VDPAU_DBG("libvdpau-sunxi closed.");
+	VDPAU_LOG(LINFO, "libvdpau-sunxi closed.");
 }
 
 VdpStatus vdp_imp_device_create_x11(Display *display,
@@ -54,8 +56,16 @@ VdpStatus vdp_imp_device_create_x11(Display *display,
 	if (!dev->cedrus)
 		return VDP_STATUS_ERROR;
 
-	VDPAU_DBG("libvdpau-sunxi version: %s", VERSION);
-	VDPAU_DBG("VE hardware version 0x%04x opened", cedrus_get_ve_version(dev->cedrus));
+	/* Set the globel LOGLEVEL variable via environment variable VDPAU_LOGLEVEL from 0-7 */
+	char *env_vdpau_loglevel = getenv("VDPAU_LOGLEVEL");
+	if (env_vdpau_loglevel &&
+	    ((atoi(env_vdpau_loglevel) >= LNONE) &&
+	     (atoi(env_vdpau_loglevel) <= LALL)))
+		LOGLEVEL = atoi(env_vdpau_loglevel);
+
+	VDPAU_LOG(LINFO, "Starting libvdpau-sunxi (%s)", VERSION);
+	VDPAU_LOG(LINFO, "VE hardware version 0x%04x opened", cedrus_get_ve_version(dev->cedrus));
+	VDPAU_LOG(LINFO, "Setting loglevel %d", LOGLEVEL);
 	*get_proc_address = vdp_get_proc_address;
 
 	char *env_vdpau_osd = getenv("VDPAU_OSD");
@@ -71,15 +81,15 @@ VdpStatus vdp_imp_device_create_x11(Display *display,
 			if (dev->g2d_fd != -1)
 			{
 				dev->g2d_enabled = 1;
-				VDPAU_DBG("OSD enabled, using G2D!");
+				VDPAU_LOG(LINFO, "OSD enabled, using G2D!");
 			}
 		}
 
 		if (!dev->g2d_enabled)
-			VDPAU_DBG("OSD enabled, using pixman");
+			VDPAU_LOG(LINFO, "OSD enabled, using pixman");
 	}
 	else
-		VDPAU_DBG("OSD disabled!");
+		VDPAU_LOG(LINFO, "OSD disabled!");
 
 	/* Try to create sunxi_disp */
 	dev->disp = sunxi_disp_open(dev->osd_enabled);
@@ -93,15 +103,15 @@ VdpStatus vdp_imp_device_create_x11(Display *display,
 			dev->disp = sunxi_disp1_5_open(dev->osd_enabled);
 
 			if (!dev->disp)
-				VDPAU_DBG("Display /dev/disp not available!");
+				VDPAU_LOG(LERR, "Display /dev/disp not available!");
 			else
-				VDPAU_DBG("Using display v1.5");
+				VDPAU_LOG(LINFO, "Using display v1.5");
 		}
 		else
-			VDPAU_DBG("Using display v2.0");
+			VDPAU_LOG(LINFO, "Using display v2.0");
 	}
 	else
-		VDPAU_DBG("Using display v1.0");
+		VDPAU_LOG(LINFO, "Using display v1.0");
 
 	return handle_create(device, dev);
 }
