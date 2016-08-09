@@ -104,7 +104,7 @@ VdpStatus vdp_pixman_blit(rgba_surface_t *rgba_dst, const VdpRect *dst_rect,
 	return VDP_STATUS_OK;
 
 zero_size_blit:
-	VDPAU_DBG("Zero size blit requested!");
+	VDPAU_LOG(LDBG, "Zero size blit requested!");
 	return VDP_STATUS_ERROR;
 }
 
@@ -150,6 +150,6 @@ VdpStatus vdp_pixman_fill(rgba_surface_t *rgba_dst, const VdpRect *dst_rect,
 	return VDP_STATUS_OK;
 
 zero_size_fill:
-	VDPAU_DBG("Zero size fill requested!");
+	VDPAU_LOG(LDBG, "Zero size fill requested!");
 	return VDP_STATUS_ERROR;
 }

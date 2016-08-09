@@ -71,7 +71,7 @@ struct sunxi_disp *sunxi_disp_open(int osd_enabled)
 
 	disp->fb = open("/dev/fb0", O_RDWR);
 	if (disp->fb == -1)
-		VDPAU_DBG("VSync disabled.");
+		VDPAU_LOG(LWARN, "VSync disabled.");
 
 	if (osd_enabled)
 	{
@@ -250,7 +250,7 @@ static int sunxi_disp_set_video_layer(struct sunxi_disp *sunxi_disp, int x, int 
 
 		args[2] = (unsigned long)(&disp->videofb_info);
 		if (ioctl(disp->fd, DISP_CMD_VIDEO_SET_FB, args))
-			VDPAU_DBG("DISP_CMD_VIDEO_SET_FB failed");
+			VDPAU_LOG(LWARN, "DISP_CMD_VIDEO_SET_FB failed");
 		last_id++;
 
 		ioctl(disp->fd, DISP_CMD_LAYER_OPEN, args);
@@ -286,8 +286,8 @@ static int sunxi_disp_set_video_layer(struct sunxi_disp *sunxi_disp, int x, int 
 
 		ioctl(disp->fd, DISP_CMD_LAYER_ENHANCE_ON, args);
 
-		VDPAU_DBG("Presentation queue csc change");
-		VDPAU_DBG("display driver -> bright: %d, contrast: %d, saturation: %d, hue: %d", b, c, s, h);
+		VDPAU_LOG(LDBG, "Presentation queue csc change");
+		VDPAU_LOG(LDBG, "display driver -> bright: %d, contrast: %d, saturation: %d, hue: %d", b, c, s, h);
 		surface->csc_change = 0;
 	}
 
