@@ -248,7 +248,7 @@ VdpStatus vdp_presentation_queue_display(VdpPresentationQueue presentation_queue
 
 	if (q_push_tail(q->queue, task))
 	{
-		VDPAU_DBG("Error inserting task");
+		VDPAU_LOG(LERR, "Error inserting task");
 		sfree(task->surface);
 		sfree(task->queue);
 		free(task);

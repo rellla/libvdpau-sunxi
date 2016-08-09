@@ -201,7 +201,7 @@ VdpStatus rgba_render_surface(rgba_surface_t *dest,
 		return VDP_STATUS_OK;
 
 	if (colors || flags)
-		VDPAU_DBG_ONCE("%s: colors and flags not implemented!", __func__);
+		VDPAU_LOG(LDBG, "%s: colors and flags not implemented!", __func__);
 
 	// set up source/destination rects using defaults where required
 	VdpRect s_rect = {0, 0, 0, 0};
