@@ -28,7 +28,10 @@ VdpStatus rgba_create(rgba_surface_t *rgba,
                       uint32_t height,
                       VdpRGBAFormat format);
 
-void rgba_destroy(rgba_surface_t *rgba);
+VdpStatus rgba_prepare(rgba_surface_t *dest,
+                       rgba_surface_t *src);
+
+void rgba_destroy(void *rgba);
 
 VdpStatus rgba_put_bits_native(rgba_surface_t *rgba,
                                void const *const *source_data,
@@ -43,9 +46,17 @@ VdpStatus rgba_put_bits_indexed(rgba_surface_t *rgba,
                                 VdpColorTableFormat color_table_format,
                                 void const *color_table);
 
-VdpStatus rgba_render_surface(rgba_surface_t *dest,
+VdpStatus rgba_render_output_surface(output_surface_ctx_t *dest,
                               VdpRect const *destination_rect,
-                              rgba_surface_t *src,
+                              output_surface_ctx_t *src,
+                              VdpRect const *source_rect,
+                              VdpColor const *colors,
+                              VdpOutputSurfaceRenderBlendState const *blend_state,
+                              uint32_t flags);
+
+VdpStatus rgba_render_bitmap_surface(output_surface_ctx_t *dest,
+                              VdpRect const *destination_rect,
+                              bitmap_surface_ctx_t *src,
                               VdpRect const *source_rect,
                               VdpColor const *colors,
                               VdpOutputSurfaceRenderBlendState const *blend_state,
@@ -57,4 +68,14 @@ void rgba_blit(rgba_surface_t *dest, const VdpRect *dest_rect, rgba_surface_t *s
 
 void rgba_flush(rgba_surface_t *rgba);
 
+/* Cache wrapping functions */
+void rgba_print_value(void *itemdata);
+VdpStatus rgba_create_cache(device_ctx_t *dev);
+void rgba_free_cache(CACHE *cache);
+void rgba_ref(CACHE *cache, int rgba_hdl);
+int rgba_set_recently_rendered(CACHE *cache, int rgba_hdl, rgba_surface_t **rgba);
+int rgba_get_refcount(CACHE *cache, int rgba_hdl);
+void rgba_unref(CACHE *cache, int rgba_hdl);
+void rgba_get_pointer(CACHE *cache, int rgba_hdl, rgba_surface_t **rgba);
+int rgba_get_free_surface(device_ctx_t *device, uint32_t width, uint32_t height, VdpRGBAFormat format, rgba_surface_t **rgba);
 #endif
