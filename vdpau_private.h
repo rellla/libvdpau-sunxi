@@ -35,6 +35,7 @@
 #include "sunxi_disp.h"
 #include "pixman.h"
 #include "queue.h"
+#include "cache.h"
 
 #define INTERNAL_YCBCR_FORMAT (VdpYCbCrFormat)0xffff
 
@@ -62,6 +63,7 @@ typedef struct
 	int osd_enabled;
 	int g2d_enabled;
 	struct sunxi_disp *disp;
+	CACHE *cache;
 } device_ctx_t;
 
 typedef struct
@@ -142,11 +144,17 @@ typedef struct
 	VdpRect dirty;
 	uint32_t flags;
 	pixman_image_t *pimage;
+	int id, old_id;
+	VdpRect s_rect, d_rect;
 } rgba_surface_t;
 
 typedef struct output_surface_ctx_struct
 {
-	rgba_surface_t rgba;
+	device_ctx_t *device;
+	VdpRGBAFormat format;
+	uint32_t width, height;
+	rgba_surface_t *rgba;
+	int rgba_handle;
 	video_surface_ctx_t *vs;
 	yuv_data_t *yuv;
 	VdpRect video_src_rect, video_dst_rect;
@@ -157,15 +165,19 @@ typedef struct output_surface_ctx_struct
 	float hue;
 	VdpTime first_presentation_time;
 	VdpPresentationQueueStatus status;
-	pthread_mutex_t mutex;
+	pthread_mutex_t mutex, rgba_mutex;
 	pthread_cond_t cond;
 	int reinit_disp;
 } output_surface_ctx_t;
 
 typedef struct
 {
-	rgba_surface_t rgba;
+	device_ctx_t *device;
+	VdpRGBAFormat format;
+	uint32_t width, height;
 	VdpBool frequently_accessed;
+	rgba_surface_t *rgba;
+	int rgba_handle;
 } bitmap_surface_ctx_t;
 
 typedef struct task
@@ -224,6 +236,7 @@ void *handle_get(VdpHandle handle);
 VdpStatus handle_destroy(VdpHandle handle);
 
 EXPORT VdpDeviceCreateX11 vdp_imp_device_create_x11;
+VdpDeviceDestroy vdp_device_destroy;
 VdpPreemptionCallbackRegister vdp_preemption_callback_register;
 
 VdpGetProcAddress vdp_get_proc_address;
