@@ -58,7 +58,7 @@ void g2d_blit(rgba_surface_t *dest, const VdpRect *dest_rect, rgba_surface_t *sr
 {
 	g2d_blt args;
 
-	args.flag = (dest->flags & RGBA_FLAG_NEEDS_CLEAR) ? G2D_BLT_NONE : G2D_BLT_PIXEL_ALPHA;
+	args.flag = G2D_BLT_PIXEL_ALPHA;
 	args.src_image.addr[0] = cedrus_mem_get_phys_addr(src->data);
 	args.src_image.w = src->width;
 	args.src_image.h = src->height;

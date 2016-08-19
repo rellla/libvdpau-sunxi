@@ -93,7 +93,7 @@ VdpStatus vdp_pixman_blit(rgba_surface_t *rgba_dst, const VdpRect *dst_rect,
 	pixman_image_set_transform(src, &transform);
 
 	/* Composite to the dest_img */
-	pixman_operator = (rgba_dst->flags & RGBA_FLAG_NEEDS_CLEAR) ? PIXMAN_OP_SRC : PIXMAN_OP_OVER;
+	pixman_operator = PIXMAN_OP_OVER;
 	pixman_image_composite32(
 		pixman_operator, src, NULL, dst,
 		(src_rect->x0 * fscale_x), (src_rect->y0 * fscale_y),

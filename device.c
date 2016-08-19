@@ -23,8 +23,21 @@
 #include <cedrus/cedrus.h>
 #include "vdpau_private.h"
 #include "sunxi_disp.h"
+#include "rgba.h"
 
 extern int LOGLEVEL;
+
+VdpStatus vdp_device_destroy(VdpDevice device)
+{
+	smart device_ctx_t *dev = handle_get(device);
+	if (!dev)
+		return VDP_STATUS_INVALID_HANDLE;
+
+	if (dev->osd_enabled)
+		rgba_free_cache(dev->cache);
+
+	return handle_destroy(device);
+}
 
 static void cleanup_device(void *ptr, void *meta)
 {
@@ -113,6 +126,14 @@ VdpStatus vdp_imp_device_create_x11(Display *display,
 	else
 		VDPAU_LOG(LINFO, "Using display v1.0");
 
+	/* Build cache for rgba surfaces */
+	if (dev->osd_enabled)
+	{
+		VdpStatus ret = rgba_create_cache(dev);
+		if (ret != VDP_STATUS_OK)
+			return ret;
+	}
+
 	return handle_create(device, dev);
 }
 
@@ -139,7 +160,7 @@ static void *const functions[] =
 	[VDP_FUNC_ID_GET_PROC_ADDRESS]                                      = vdp_get_proc_address,
 	[VDP_FUNC_ID_GET_API_VERSION]                                       = vdp_get_api_version,
 	[VDP_FUNC_ID_GET_INFORMATION_STRING]                                = vdp_get_information_string,
-	[VDP_FUNC_ID_DEVICE_DESTROY]                                        = handle_destroy,
+	[VDP_FUNC_ID_DEVICE_DESTROY]                                        = vdp_device_destroy,
 	[VDP_FUNC_ID_GENERATE_CSC_MATRIX]                                   = vdp_generate_csc_matrix,
 	[VDP_FUNC_ID_VIDEO_SURFACE_QUERY_CAPABILITIES]                      = vdp_video_surface_query_capabilities,
 	[VDP_FUNC_ID_VIDEO_SURFACE_QUERY_GET_PUT_BITS_Y_CB_CR_CAPABILITIES] = vdp_video_surface_query_get_put_bits_y_cb_cr_capabilities,
