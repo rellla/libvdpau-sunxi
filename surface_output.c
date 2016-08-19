@@ -24,12 +24,15 @@ static void cleanup_output_surface(void *ptr, void *meta)
 {
 	output_surface_ctx_t *surface = ptr;
 
-	rgba_destroy(&surface->rgba);
+	rgba_unref(surface->device->cache, surface->rgba_handle);
+	pthread_mutex_destroy(&surface->rgba_mutex);
+	pthread_mutex_destroy(&surface->mutex);
 
 	if (surface->yuv)
 		yuv_unref(surface->yuv);
 
 	sfree(surface->vs);
+	sfree(surface->device);
 }
 
 VdpStatus vdp_output_surface_create(VdpDevice device,
@@ -38,8 +41,6 @@ VdpStatus vdp_output_surface_create(VdpDevice device,
                                     uint32_t height,
                                     VdpOutputSurface *surface)
 {
-	int ret = VDP_STATUS_OK;
-
 	if (!surface)
 		return VDP_STATUS_INVALID_POINTER;
 
@@ -53,11 +54,17 @@ VdpStatus vdp_output_surface_create(VdpDevice device,
 
 	out->contrast = 1.0;
 	out->saturation = 1.0;
+	out->width = width;
+	out->height = height;
+	out->format = rgba_format;
+	out->device = sref(dev);
 
-	ret = rgba_create(&out->rgba, dev, width, height, rgba_format);
-	if (ret != VDP_STATUS_OK)
-		return ret;
+	out->rgba = NULL;
+	out->rgba_handle = 0;
 
+	pthread_mutex_init(&out->rgba_mutex, NULL);
+	pthread_mutex_init(&out->mutex, NULL);
+	VDPAU_LOG(LDBG, "Create OS width: %d, height: %d", width, height);
 	return handle_create(surface, out);
 }
 
@@ -71,13 +78,13 @@ VdpStatus vdp_output_surface_get_parameters(VdpOutputSurface surface,
 		return VDP_STATUS_INVALID_HANDLE;
 
 	if (rgba_format)
-		*rgba_format = out->rgba.format;
+		*rgba_format = out->format;
 
 	if (width)
-		*width = out->rgba.width;
+		*width = out->width;
 
 	if (height)
-		*height = out->rgba.height;
+		*height = out->height;
 
 	return VDP_STATUS_OK;
 }
@@ -91,8 +98,6 @@ VdpStatus vdp_output_surface_get_bits_native(VdpOutputSurface surface,
 	if (!out)
 		return VDP_STATUS_INVALID_HANDLE;
 
-
-
 	return VDP_STATUS_ERROR;
 }
 
@@ -105,7 +110,49 @@ VdpStatus vdp_output_surface_put_bits_native(VdpOutputSurface surface,
 	if (!out)
 		return VDP_STATUS_INVALID_HANDLE;
 
-	return rgba_put_bits_native(&out->rgba, source_data, source_pitches, destination_rect);
+	if (!out->device->osd_enabled)
+		return VDP_STATUS_OK;
+
+	VdpStatus ret;
+
+	/* We have not yet linked an rgba surface in the output surface, so
+	 *   - get a free rgba surface from the cache
+	 *   - reference it
+	 *   - put the bits on it
+	 *   - link the rgba surface and its handle to the bitmap surface
+	 */
+	if (out->rgba == NULL) {
+		ret = rgba_put_bits_native_new(out->device, &out->rgba_handle, &out->rgba,
+					       out->width, out->height, out->format,
+					       source_data, source_pitches, destination_rect);
+	} else {
+		/* We have already linked an rgba surface in the bitmap surface,
+		 * check, how often it is linked:
+		 */
+		if (rgba_get_refcount(out->device->cache, out->rgba_handle) == 1) {
+			/* 1 time (it already got a put_bits_action, or we did a render action,
+			 *         but it is not visible nor queued for displaying yet:
+			 *      - simply put the bits on it
+			 */
+			ret = rgba_put_bits_native_regular(out->rgba, source_data, source_pitches, destination_rect);
+		} else {
+			/* >= 2 times (it already got a put_bits_action, AND it's possible,
+			 *             that it is visible or queued for displaying yet,
+			 *             so we must not touch that surface!
+			 *      - get a free rgba surface from the cache
+			 *      - duplicate the originally intended dest surface into the new one
+			 *      - put the bits on the new surface
+			 *      - reference the new surface
+			 *      - unreference the surface, we should originally put the bits into
+			 *      - link the rgba surface and its handle to the bitmap surface
+			 */
+			ret = rgba_put_bits_native_copy(out->device, &out->rgba_handle, &out->rgba,
+						        out->width, out->height, out->format,
+						        source_data, source_pitches, destination_rect);
+		}
+	}
+
+	return ret;
 }
 
 VdpStatus vdp_output_surface_put_bits_indexed(VdpOutputSurface surface,
@@ -120,8 +167,52 @@ VdpStatus vdp_output_surface_put_bits_indexed(VdpOutputSurface surface,
 	if (!out)
 		return VDP_STATUS_INVALID_HANDLE;
 
-	return rgba_put_bits_indexed(&out->rgba, source_indexed_format, source_data, source_pitch,
-					destination_rect, color_table_format, color_table);
+	if (!out->device->osd_enabled)
+		return VDP_STATUS_OK;
+
+	VdpStatus ret;
+
+	/* We have not yet linked an rgba surface in the output surface, so
+	 *   - get a free rgba surface from the cache
+	 *   - reference it
+	 *   - put the bits on it
+	 *   - link the rgba surface and its handle to the bitmap surface
+	 */
+	if (out->rgba == NULL) {
+		ret = rgba_put_bits_indexed_new(out->device, &out->rgba_handle, &out->rgba,
+						out->width, out->height, out->format,
+						source_indexed_format, source_data, source_pitch,
+						destination_rect, color_table_format, color_table);
+	} else {
+		/* We have already linked an rgba surface in the bitmap surface,
+		 * check, how often it is linked:
+		 */
+		if (rgba_get_refcount(out->device->cache, out->rgba_handle) == 1) {
+			/* 1 time (it already got a put_bits_action, or we did a render action,
+			 *         but it is not visible nor queued for displaying yet:
+			 *      - simply put the bits on it
+			 */
+			ret = rgba_put_bits_indexed_regular(out->rgba, source_indexed_format, source_data, source_pitch,
+							    destination_rect, color_table_format, color_table);
+		} else {
+			/* >= 2 times (it already got a put_bits_action, AND it's possible,
+			 *             that it is visible or queued for displaying yet,
+			 *             so we must not touch that surface!
+			 *      - get a free rgba surface from the cache
+			 *      - duplicate the originally intended dest surface into the new one
+			 *      - put the bits on the new surface
+			 *      - reference the new surface
+			 *      - unreference the surface, we should originally put the bits into
+			 *      - link the rgba surface and its handle to the bitmap surface
+			 */
+			ret = rgba_put_bits_indexed_copy(out->device, &out->rgba_handle, &out->rgba,
+							 out->width, out->height, out->format,
+							 source_indexed_format, source_data, source_pitch,
+							 destination_rect, color_table_format, color_table);
+		}
+	}
+
+	return ret;
 }
 
 VdpStatus vdp_output_surface_put_bits_y_cb_cr(VdpOutputSurface surface,
@@ -134,6 +225,9 @@ VdpStatus vdp_output_surface_put_bits_y_cb_cr(VdpOutputSurface surface,
 	smart output_surface_ctx_t *out = handle_get(surface);
 	if (!out)
 		return VDP_STATUS_INVALID_HANDLE;
+
+	if (!out->device->osd_enabled)
+		return VDP_STATUS_OK;
 
 	return VDP_STATUS_ERROR;
 }
@@ -150,10 +244,15 @@ VdpStatus vdp_output_surface_render_output_surface(VdpOutputSurface destination_
 	if (!out)
 		return VDP_STATUS_INVALID_HANDLE;
 
+	if (!out->device->osd_enabled)
+		return VDP_STATUS_OK;
+
 	smart output_surface_ctx_t *in = handle_get(source_surface);
 
-	return rgba_render_surface(&out->rgba, destination_rect, in ? &in->rgba : NULL, source_rect,
-					colors, blend_state, flags);
+	return rgba_render_surface(&out->rgba, &out->rgba_handle, destination_rect,
+				   in ? in->rgba : NULL, in ? in->rgba_handle : 0, source_rect,
+				   colors, blend_state, flags,
+				   out->width, out->height, out->format, out->device, out->rgba_mutex);
 }
 
 VdpStatus vdp_output_surface_render_bitmap_surface(VdpOutputSurface destination_surface,
@@ -168,10 +267,15 @@ VdpStatus vdp_output_surface_render_bitmap_surface(VdpOutputSurface destination_
 	if (!out)
 		return VDP_STATUS_INVALID_HANDLE;
 
+	if (!out->device->osd_enabled)
+		return VDP_STATUS_OK;
+
 	smart bitmap_surface_ctx_t *in = handle_get(source_surface);
 
-	return rgba_render_surface(&out->rgba, destination_rect, in ? &in->rgba : NULL, source_rect,
-					colors, blend_state, flags);
+	return rgba_render_surface(&out->rgba, &out->rgba_handle, destination_rect,
+				   in ? in->rgba : NULL, in ? in->rgba_handle : 0, source_rect,
+				   colors, blend_state, flags,
+				   out->width, out->height, out->format, out->device, out->rgba_mutex);
 }
 
 VdpStatus vdp_output_surface_query_capabilities(VdpDevice device,

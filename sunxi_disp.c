@@ -308,7 +308,7 @@ static int sunxi_disp_set_osd_layer(struct sunxi_disp *sunxi_disp, int x, int y,
 {
 	struct sunxi_disp_private *disp = (struct sunxi_disp_private *)sunxi_disp;
 
-	switch (surface->rgba.format)
+	switch (surface->rgba->format)
 	{
 	case VDP_RGBA_FORMAT_R8G8B8A8:
 		disp->osd_info.fb.br_swap = 1;
@@ -319,17 +319,17 @@ static int sunxi_disp_set_osd_layer(struct sunxi_disp *sunxi_disp, int x, int y,
 		break;
 	}
 
-	disp->osd_info.fb.addr[0] = cedrus_mem_get_phys_addr(surface->rgba.data);
-	disp->osd_info.fb.size.width = surface->rgba.width;
-	disp->osd_info.fb.size.height = surface->rgba.height;
-	disp->osd_info.src_win.x = surface->rgba.dirty.x0;
-	disp->osd_info.src_win.y = surface->rgba.dirty.y0;
-	disp->osd_info.src_win.width = surface->rgba.dirty.x1 - surface->rgba.dirty.x0;
-	disp->osd_info.src_win.height = surface->rgba.dirty.y1 - surface->rgba.dirty.y0;
-	disp->osd_info.scn_win.x = x + surface->rgba.dirty.x0;
-	disp->osd_info.scn_win.y = y + surface->rgba.dirty.y0;
-	disp->osd_info.scn_win.width = min_nz(width, surface->rgba.dirty.x1) - surface->rgba.dirty.x0;
-	disp->osd_info.scn_win.height = min_nz(height, surface->rgba.dirty.y1) - surface->rgba.dirty.y0;
+	disp->osd_info.fb.addr[0] = cedrus_mem_get_phys_addr(surface->rgba->data);
+	disp->osd_info.fb.size.width = surface->rgba->width;
+	disp->osd_info.fb.size.height = surface->rgba->height;
+	disp->osd_info.src_win.x = surface->rgba->dirty.x0;
+	disp->osd_info.src_win.y = surface->rgba->dirty.y0;
+	disp->osd_info.src_win.width = surface->rgba->dirty.x1 - surface->rgba->dirty.x0;
+	disp->osd_info.src_win.height = surface->rgba->dirty.y1 - surface->rgba->dirty.y0;
+	disp->osd_info.scn_win.x = x + surface->rgba->dirty.x0;
+	disp->osd_info.scn_win.y = y + surface->rgba->dirty.y0;
+	disp->osd_info.scn_win.width = min_nz(width, surface->rgba->dirty.x1) - surface->rgba->dirty.x0;
+	disp->osd_info.scn_win.height = min_nz(height, surface->rgba->dirty.y1) - surface->rgba->dirty.y0;
 
 	uint32_t args[4] = { 0, disp->osd_layer, (unsigned long)(&disp->osd_info), 0 };
 	ioctl(disp->fd, DISP_CMD_LAYER_SET_PARA, args);

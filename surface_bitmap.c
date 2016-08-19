@@ -19,12 +19,14 @@
 
 #include "vdpau_private.h"
 #include "rgba.h"
+// #include "cache.h"
 
 static void cleanup_bitmap_surface(void *ptr, void *meta)
 {
 	bitmap_surface_ctx_t *surface = ptr;
 
-	rgba_destroy(&surface->rgba);
+	rgba_unref(surface->device->cache, surface->rgba_handle);
+	sfree(surface->device);
 }
 
 VdpStatus vdp_bitmap_surface_create(VdpDevice device,
@@ -34,8 +36,6 @@ VdpStatus vdp_bitmap_surface_create(VdpDevice device,
                                     VdpBool frequently_accessed,
                                     VdpBitmapSurface *surface)
 {
-	int ret = VDP_STATUS_OK;
-
 	if (!surface)
 		return VDP_STATUS_INVALID_POINTER;
 
@@ -47,12 +47,16 @@ VdpStatus vdp_bitmap_surface_create(VdpDevice device,
 	if (!out)
 		return VDP_STATUS_RESOURCES;
 
+	out->width = width;
+	out->height = height;
+	out->format = rgba_format;
 	out->frequently_accessed = frequently_accessed;
+	out->device = sref(dev);
 
-	ret = rgba_create(&out->rgba, dev, width, height, rgba_format);
-	if (ret != VDP_STATUS_OK)
-		return ret;
+	out->rgba = NULL;
+	out->rgba_handle = 0;
 
+	VDPAU_LOG(LDBG, "Create BS width: %d, height: %d", width, height);
 	return handle_create(surface, out);
 }
 
@@ -67,13 +71,13 @@ VdpStatus vdp_bitmap_surface_get_parameters(VdpBitmapSurface surface,
 		return VDP_STATUS_INVALID_HANDLE;
 
 	if (rgba_format)
-		*rgba_format = out->rgba.format;
+		*rgba_format = out->format;
 
 	if (width)
-		*width = out->rgba.width;
+		*width = out->width;
 
 	if (height)
-		*height = out->rgba.height;
+		*height = out->height;
 
 	if (frequently_accessed)
 		*frequently_accessed = out->frequently_accessed;
@@ -90,9 +94,49 @@ VdpStatus vdp_bitmap_surface_put_bits_native(VdpBitmapSurface surface,
 	if (!out)
 		return VDP_STATUS_INVALID_HANDLE;
 
-	rgba_put_bits_native(&out->rgba, source_data, source_pitches, destination_rect);
+	if (!out->device->osd_enabled)
+		return VDP_STATUS_OK;
 
-	return VDP_STATUS_OK;
+	VdpStatus ret;
+
+	/* We have not yet linked an rgba surface in the bitmap surface, so
+	 *   - get a free rgba surface from the cache
+	 *   - reference it
+	 *   - put the bits on it
+	 *   - link the rgba surface and its handle to the bitmap surface
+	 */
+	if (out->rgba == NULL) {
+		ret = rgba_put_bits_native_new(out->device, &out->rgba_handle, &out->rgba,
+					       out->width, out->height, out->format,
+					       source_data, source_pitches, destination_rect);
+	} else {
+		/* We have already linked an rgba surface in the bitmap surface,
+		 * check, how often it is linked:
+		 */
+		if (rgba_get_refcount(out->device->cache, out->rgba_handle) == 1) {
+			/* 1 time (it already got a put_bits_action, or we did a render action,
+			 *         but it is not visible nor queued for displaying yet:
+			 *      - simply put the bits on it
+			 */
+			ret = rgba_put_bits_native_regular(out->rgba, source_data, source_pitches, destination_rect);
+		} else {
+			/* >= 2 times (it already got a put_bits_action, AND it's possible,
+			 *             that it is visible or queued for displaying yet,
+			 *             so we must not touch that surface!
+			 *      - get a free rgba surface from the cache
+			 *      - duplicate the originally intended dest surface into the new one
+			 *      - put the bits on the new surface
+			 *      - reference the new surface
+			 *      - unreference the surface, we should originally put the bits into
+			 *      - link the rgba surface and its handle to the bitmap surface
+			 */
+			ret = rgba_put_bits_native_copy(out->device, &out->rgba_handle, &out->rgba,
+						       out->width, out->height, out->format,
+						       source_data, source_pitches, destination_rect);
+		}
+	}
+
+	return ret;
 }
 
 VdpStatus vdp_bitmap_surface_query_capabilities(VdpDevice device,
