@@ -303,12 +303,12 @@ static VdpStatus do_presentation_queue_display(queue_ctx_t *q, task_t *task)
 	if (!q->device->osd_enabled)
 		return VDP_STATUS_OK;
 
-	if (os->rgba.flags & RGBA_FLAG_NEEDS_CLEAR)
-		rgba_clear(&os->rgba);
+	if (os->rgba->flags & RGBA_FLAG_NEEDS_CLEAR)
+		rgba_clear(os->rgba);
 
-	if (os->rgba.flags & RGBA_FLAG_DIRTY)
+	if (os->rgba->flags & RGBA_FLAG_DIRTY)
 	{
-		rgba_flush(&os->rgba);
+		rgba_flush(os->rgba);
 		q->target->disp->set_osd_layer(q->target->disp, q->target->x, q->target->y, clip_width, clip_height, os);
 	}
 	else
@@ -399,9 +399,12 @@ static void *presentation_thread(void *param)
 				sfree(os_prev->vs);
 				os_prev->vs = NULL;
 
+
 				pthread_mutex_lock(&os_prev->mutex);
 				if (os_prev->status != VDP_PRESENTATION_QUEUE_STATUS_IDLE)
 				{
+					if (os_prev->device->osd_enabled && (os_prev->rgba->flags & RGBA_FLAG_DIRTY))
+						os_prev->rgba->flags |= RGBA_FLAG_NEEDS_CLEAR;
 					os_prev->status = VDP_PRESENTATION_QUEUE_STATUS_IDLE;
 					pthread_cond_signal(&os_prev->cond);
 				}

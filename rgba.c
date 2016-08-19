@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2013-2014 Jens Kuske <jenskuske@gmail.com>
+ * Copyright (c) 2016-2017 Andreas Baierl <ichgeh@imkreisrum.de>
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -25,6 +26,11 @@
 #include "rgba_pixman.h"
 #include "rgba_g2d.h"
 
+/*
+ * Rgba helper functions
+ */
+static int rgba_id = 0;
+
 static void dirty_add_rect(VdpRect *dirty, const VdpRect *rect)
 {
 	dirty->x0 = min(dirty->x0, rect->x0);
@@ -37,6 +43,63 @@ static int dirty_in_rect(const VdpRect *dirty, const VdpRect *rect)
 {
 	return (dirty->x0 >= rect->x0) && (dirty->y0 >= rect->y0) &&
 	       (dirty->x1 <= rect->x1) && (dirty->y1 <= rect->y1);
+}
+
+static int rect_changed(VdpRect const *rect1, VdpRect rect2)
+{
+	if (!rect1)
+		return 1;
+
+	if (rect1->x0 == rect2.x0 &&
+	    rect1->y0 == rect2.y0 &&
+	    rect1->x1 == rect2.x1 &&
+	    rect1->y1 == rect2.y1)
+		return 0;
+
+	return 1;
+}
+
+static int rgba_changed(rgba_surface_t *dest,
+			rgba_surface_t *src,
+			VdpRect const *d_rect,
+			VdpRect const *s_rect)
+{
+	if (!dest && !src)
+		return 0;
+
+	int id;
+
+	if (src)
+		id = src->id;
+	else
+		id = -1;
+
+	if ((!dest && src) ||
+	    (dest && !src) ||
+	    (dest->last_render.id != id) ||
+	    rect_changed(d_rect, dest->last_render.d_rect) ||
+	    rect_changed(d_rect, dest->last_render.d_rect))
+		return 1;
+
+	return 0;
+}
+
+static void rgba_save_render(rgba_surface_t *dest, VdpRect *d_rect, rgba_surface_t *src, VdpRect *s_rect)
+{
+	dest->last_render.d_rect.x0 = d_rect->x0;
+	dest->last_render.d_rect.x1 = d_rect->x1;
+	dest->last_render.d_rect.y0 = d_rect->y0;
+	dest->last_render.d_rect.y1 = d_rect->y1;
+
+	dest->last_render.s_rect.x0 = s_rect->x0;
+	dest->last_render.s_rect.x1 = s_rect->x1;
+	dest->last_render.s_rect.y0 = s_rect->y0;
+	dest->last_render.s_rect.y1 = s_rect->y1;
+
+	if (src)
+		dest->last_render.id = src->id;
+	else
+		dest->last_render.id = -1;
 }
 
 VdpStatus rgba_create(rgba_surface_t *rgba,
@@ -69,6 +132,8 @@ VdpStatus rgba_create(rgba_surface_t *rgba,
 		rgba->dirty.y0 = height;
 		rgba->dirty.x1 = 0;
 		rgba->dirty.y1 = 0;
+		rgba->id = 0;
+
 		rgba_fill(rgba, NULL, 0x00000000);
 	}
 
@@ -82,26 +147,32 @@ void rgba_destroy(rgba_surface_t *rgba)
 
 	if (rgba->device->osd_enabled)
 	{
-		if(!rgba->device->g2d_enabled)
+		if (!rgba->device->g2d_enabled)
 			vdp_pixman_unref(rgba);
-
 		cedrus_mem_free(rgba->data);
 	}
 
 	sfree(rgba->device);
 }
 
+/*
+ * VDPAU API rgba helper functions
+ */
 VdpStatus rgba_put_bits_native(rgba_surface_t *rgba,
                                void const *const *source_data,
                                uint32_t const *source_pitches,
                                VdpRect const *destination_rect)
 {
-	if (!rgba->device->osd_enabled)
-		return VDP_STATUS_OK;
-
 	VdpRect d_rect = {0, 0, rgba->width, rgba->height};
 	if (destination_rect)
 		d_rect = *destination_rect;
+
+	/* Skip the copy, if d_rect is zerosized. mpv does this with it's preemtion implementation */
+	if (d_rect.x0 == 0 &&
+	    d_rect.x1 == 0 &&
+	    d_rect.y0 == 0 &&
+	    d_rect.y1 == 0)
+		return VDP_STATUS_OK;
 
 	if ((rgba->flags & RGBA_FLAG_NEEDS_CLEAR) && !dirty_in_rect(&rgba->dirty, &d_rect))
 		rgba_clear(rgba);
@@ -126,22 +197,21 @@ VdpStatus rgba_put_bits_native(rgba_surface_t *rgba,
 	rgba->flags |= RGBA_FLAG_DIRTY | RGBA_FLAG_NEEDS_FLUSH;
 	dirty_add_rect(&rgba->dirty, &d_rect);
 
+	rgba->id = ++rgba_id;
+
 	return VDP_STATUS_OK;
 }
 
 VdpStatus rgba_put_bits_indexed(rgba_surface_t *rgba,
-                                VdpIndexedFormat source_indexed_format,
-                                void const *const *source_data,
-                                uint32_t const *source_pitch,
-                                VdpRect const *destination_rect,
-                                VdpColorTableFormat color_table_format,
-                                void const *color_table)
+                                       VdpIndexedFormat source_indexed_format,
+                                       void const *const *source_data,
+                                       uint32_t const *source_pitch,
+                                       VdpRect const *destination_rect,
+                                       VdpColorTableFormat color_table_format,
+                                       void const *color_table)
 {
 	if (color_table_format != VDP_COLOR_TABLE_FORMAT_B8G8R8X8)
 		return VDP_STATUS_INVALID_COLOR_TABLE_FORMAT;
-
-	if (!rgba->device->osd_enabled)
-		return VDP_STATUS_OK;
 
 	int x, y;
 	const uint32_t *colormap = color_table;
@@ -151,6 +221,13 @@ VdpStatus rgba_put_bits_indexed(rgba_surface_t *rgba,
 	VdpRect d_rect = {0, 0, rgba->width, rgba->height};
 	if (destination_rect)
 		d_rect = *destination_rect;
+
+	/* Skip the copy, if d_rect is zerosized. mpv does this with it's preemtion implementation */
+	if (d_rect.x0 == 0 &&
+	    d_rect.x1 == 0 &&
+	    d_rect.y0 == 0 &&
+	    d_rect.y1 == 0)
+		return VDP_STATUS_OK;
 
 	if ((rgba->flags & RGBA_FLAG_NEEDS_CLEAR) && !dirty_in_rect(&rgba->dirty, &d_rect))
 		rgba_clear(rgba);
@@ -186,6 +263,8 @@ VdpStatus rgba_put_bits_indexed(rgba_surface_t *rgba,
 	rgba->flags |= RGBA_FLAG_DIRTY | RGBA_FLAG_NEEDS_FLUSH;
 	dirty_add_rect(&rgba->dirty, &d_rect);
 
+	rgba->id = ++rgba_id;
+
 	return VDP_STATUS_OK;
 }
 
@@ -197,17 +276,14 @@ VdpStatus rgba_render_surface(rgba_surface_t *dest,
                               VdpOutputSurfaceRenderBlendState const *blend_state,
                               uint32_t flags)
 {
-	if (!dest->device->osd_enabled)
-		return VDP_STATUS_OK;
-
 	if (colors || flags)
 		VDPAU_LOG(LDBG, "%s: colors and flags not implemented!", __func__);
 
 	// set up source/destination rects using defaults where required
 	VdpRect s_rect = {0, 0, 0, 0};
 	VdpRect d_rect = {0, 0, dest->width, dest->height};
-	s_rect.x1 = src ? src->width : 1;
-	s_rect.y1 = src ? src->height : 1;
+	s_rect.x1 = src ? src->width : 0;
+	s_rect.y1 = src ? src->height : 0;
 
 	if (source_rect)
 		s_rect = *source_rect;
@@ -222,14 +298,19 @@ VdpStatus rgba_render_surface(rgba_surface_t *dest,
 	if ((dest->flags & RGBA_FLAG_NEEDS_CLEAR) && !dirty_in_rect(&dest->dirty, &d_rect))
 		rgba_clear(dest);
 
-	if (!src)
-		rgba_fill(dest, &d_rect, 0xffffffff);
-	else
-		rgba_blit(dest, &d_rect, src, &s_rect);
+	if (rgba_changed(dest, src, &d_rect, &s_rect))
+	{
+		if (!src)
+			rgba_fill(dest, &d_rect, 0xffffffff);
+		else
+			rgba_blit(dest, &d_rect, src, &s_rect);
 
+	}
 	dest->flags &= ~RGBA_FLAG_NEEDS_CLEAR;
 	dest->flags |= RGBA_FLAG_DIRTY;
 	dirty_add_rect(&dest->dirty, &d_rect);
+
+	rgba_save_render(dest, &d_rect, src, &s_rect);
 
 	return VDP_STATUS_OK;
 }

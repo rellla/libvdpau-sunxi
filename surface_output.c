@@ -24,12 +24,13 @@ static void cleanup_output_surface(void *ptr, void *meta)
 {
 	output_surface_ctx_t *surface = ptr;
 
-	rgba_destroy(&surface->rgba);
+	rgba_destroy(surface->rgba);
 
 	if (surface->yuv)
 		yuv_unref(surface->yuv);
 
 	sfree(surface->vs);
+	sfree(surface->device);
 }
 
 VdpStatus vdp_output_surface_create(VdpDevice device,
@@ -53,8 +54,11 @@ VdpStatus vdp_output_surface_create(VdpDevice device,
 
 	out->contrast = 1.0;
 	out->saturation = 1.0;
+	out->device = sref(dev);
 
-	ret = rgba_create(&out->rgba, dev, width, height, rgba_format);
+	out->rgba = (rgba_surface_t *)calloc(1, sizeof(rgba_surface_t));
+
+	ret = rgba_create(out->rgba, dev, width, height, rgba_format);
 	if (ret != VDP_STATUS_OK)
 		return ret;
 
@@ -71,13 +75,13 @@ VdpStatus vdp_output_surface_get_parameters(VdpOutputSurface surface,
 		return VDP_STATUS_INVALID_HANDLE;
 
 	if (rgba_format)
-		*rgba_format = out->rgba.format;
+		*rgba_format = out->rgba->format;
 
 	if (width)
-		*width = out->rgba.width;
+		*width = out->rgba->width;
 
 	if (height)
-		*height = out->rgba.height;
+		*height = out->rgba->height;
 
 	return VDP_STATUS_OK;
 }
@@ -91,8 +95,6 @@ VdpStatus vdp_output_surface_get_bits_native(VdpOutputSurface surface,
 	if (!out)
 		return VDP_STATUS_INVALID_HANDLE;
 
-
-
 	return VDP_STATUS_ERROR;
 }
 
@@ -105,7 +107,10 @@ VdpStatus vdp_output_surface_put_bits_native(VdpOutputSurface surface,
 	if (!out)
 		return VDP_STATUS_INVALID_HANDLE;
 
-	return rgba_put_bits_native(&out->rgba, source_data, source_pitches, destination_rect);
+	if (!out->device->osd_enabled)
+		return VDP_STATUS_OK;
+
+	return rgba_put_bits_native(out->rgba, source_data, source_pitches, destination_rect);
 }
 
 VdpStatus vdp_output_surface_put_bits_indexed(VdpOutputSurface surface,
@@ -120,8 +125,11 @@ VdpStatus vdp_output_surface_put_bits_indexed(VdpOutputSurface surface,
 	if (!out)
 		return VDP_STATUS_INVALID_HANDLE;
 
-	return rgba_put_bits_indexed(&out->rgba, source_indexed_format, source_data, source_pitch,
-					destination_rect, color_table_format, color_table);
+	if (!out->device->osd_enabled)
+		return VDP_STATUS_OK;
+
+	return rgba_put_bits_indexed(out->rgba, source_indexed_format, source_data, source_pitch,
+				     destination_rect, color_table_format, color_table);
 }
 
 VdpStatus vdp_output_surface_put_bits_y_cb_cr(VdpOutputSurface surface,
@@ -134,6 +142,9 @@ VdpStatus vdp_output_surface_put_bits_y_cb_cr(VdpOutputSurface surface,
 	smart output_surface_ctx_t *out = handle_get(surface);
 	if (!out)
 		return VDP_STATUS_INVALID_HANDLE;
+
+	if (!out->device->osd_enabled)
+		return VDP_STATUS_OK;
 
 	return VDP_STATUS_ERROR;
 }
@@ -150,10 +161,13 @@ VdpStatus vdp_output_surface_render_output_surface(VdpOutputSurface destination_
 	if (!out)
 		return VDP_STATUS_INVALID_HANDLE;
 
+	if (!out->device->osd_enabled)
+		return VDP_STATUS_OK;
+
 	smart output_surface_ctx_t *in = handle_get(source_surface);
 
-	return rgba_render_surface(&out->rgba, destination_rect, in ? &in->rgba : NULL, source_rect,
-					colors, blend_state, flags);
+	return rgba_render_surface(out->rgba,destination_rect, in ? in->rgba : NULL, source_rect,
+				   colors, blend_state, flags);
 }
 
 VdpStatus vdp_output_surface_render_bitmap_surface(VdpOutputSurface destination_surface,
@@ -168,10 +182,13 @@ VdpStatus vdp_output_surface_render_bitmap_surface(VdpOutputSurface destination_
 	if (!out)
 		return VDP_STATUS_INVALID_HANDLE;
 
+	if (!out->device->osd_enabled)
+		return VDP_STATUS_OK;
+
 	smart bitmap_surface_ctx_t *in = handle_get(source_surface);
 
-	return rgba_render_surface(&out->rgba, destination_rect, in ? &in->rgba : NULL, source_rect,
-					colors, blend_state, flags);
+	return rgba_render_surface(out->rgba, destination_rect, in ? in->rgba : NULL, source_rect,
+				   colors, blend_state, flags);
 }
 
 VdpStatus vdp_output_surface_query_capabilities(VdpDevice device,

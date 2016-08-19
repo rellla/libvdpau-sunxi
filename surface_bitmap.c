@@ -24,7 +24,8 @@ static void cleanup_bitmap_surface(void *ptr, void *meta)
 {
 	bitmap_surface_ctx_t *surface = ptr;
 
-	rgba_destroy(&surface->rgba);
+	rgba_destroy(surface->rgba);
+	sfree(surface->device);
 }
 
 VdpStatus vdp_bitmap_surface_create(VdpDevice device,
@@ -48,8 +49,11 @@ VdpStatus vdp_bitmap_surface_create(VdpDevice device,
 		return VDP_STATUS_RESOURCES;
 
 	out->frequently_accessed = frequently_accessed;
+	out->device = sref(dev);
 
-	ret = rgba_create(&out->rgba, dev, width, height, rgba_format);
+	out->rgba = (rgba_surface_t *)calloc(1, sizeof(rgba_surface_t));
+
+	ret = rgba_create(out->rgba, dev, width, height, rgba_format);
 	if (ret != VDP_STATUS_OK)
 		return ret;
 
@@ -67,13 +71,13 @@ VdpStatus vdp_bitmap_surface_get_parameters(VdpBitmapSurface surface,
 		return VDP_STATUS_INVALID_HANDLE;
 
 	if (rgba_format)
-		*rgba_format = out->rgba.format;
+		*rgba_format = out->rgba->format;
 
 	if (width)
-		*width = out->rgba.width;
+		*width = out->rgba->width;
 
 	if (height)
-		*height = out->rgba.height;
+		*height = out->rgba->height;
 
 	if (frequently_accessed)
 		*frequently_accessed = out->frequently_accessed;
@@ -90,9 +94,10 @@ VdpStatus vdp_bitmap_surface_put_bits_native(VdpBitmapSurface surface,
 	if (!out)
 		return VDP_STATUS_INVALID_HANDLE;
 
-	rgba_put_bits_native(&out->rgba, source_data, source_pitches, destination_rect);
+	if (!out->device->osd_enabled)
+		return VDP_STATUS_OK;
 
-	return VDP_STATUS_OK;
+	return rgba_put_bits_native(out->rgba, source_data, source_pitches, destination_rect);
 }
 
 VdpStatus vdp_bitmap_surface_query_capabilities(VdpDevice device,
