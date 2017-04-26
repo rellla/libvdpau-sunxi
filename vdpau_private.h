@@ -206,6 +206,7 @@ typedef struct task
 #define DIV_ROUND_UP(n, d) (((n) + (d) - 1) / (d))
 
 #define EXPORT __attribute__ ((visibility ("default")))
+#define UNUSED(expr) (void)(expr)
 
 VdpStatus new_decoder_mpeg12(decoder_ctx_t *decoder);
 VdpStatus new_decoder_h264(decoder_ctx_t *decoder);
