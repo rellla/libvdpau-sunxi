@@ -178,7 +178,11 @@ static VdpStatus rgba_prepare(rgba_surface_t *dest, rgba_surface_t *src)
 
 	if (src != NULL)
 	{
-		 /* copy full width dirty area */
+		/* Skip, if we have no dirty area */
+		if ((src->dirty.x0 >= src->dirty.x1) || (src->dirty.y0 >= src->dirty.y1))
+			return VDP_STATUS_OK;
+
+		/* copy full width dirty area */
 		if (src->dirty.x0 == 0 && src->dirty.x1 == src->width)
 			memcpy(cedrus_mem_get_pointer(dest->data) + src->dirty.y0 * src->width * 4,
 			       cedrus_mem_get_pointer(src->data) + src->dirty.y0 * src->width * 4,
@@ -189,7 +193,7 @@ static VdpStatus rgba_prepare(rgba_surface_t *dest, rgba_surface_t *src)
 			for (y = src->dirty.y0; y < src->dirty.y1; y ++)
 				memcpy(cedrus_mem_get_pointer(dest->data) + (y * src->width + src->dirty.x0) * 4,
 				       cedrus_mem_get_pointer(src->data)  + (y * src->width + src->dirty.x0) * 4,
-				       src->dirty.x1 - src->dirty.x0);
+				       (src->dirty.x1 - src->dirty.x0) * 4);
 		}
 
 		rgba_duplicate_attribs(dest, src);
