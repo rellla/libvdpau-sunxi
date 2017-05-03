@@ -51,8 +51,8 @@ int check_for_xevents(task_t *task)
 		 * This restarts the displaying routines without extra resizing.
 		 */
 		case MapNotify:
-			ret_flags |= XEVENTS_REINIT;
-			ret_flags &= ~(XEVENTS_DRAWABLE_CHANGE | XEVENTS_DRAWABLE_UNMAP);
+			ret_flags |= (XEVENTS_REINIT | XEVENTS_DRAWABLE_CHANGE);
+			ret_flags &= ~XEVENTS_DRAWABLE_UNMAP;
 			break;
 		/*
 		 * Window dimension or position has changed.

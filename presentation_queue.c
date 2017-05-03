@@ -93,15 +93,25 @@ VdpStatus vdp_presentation_queue_target_create_x11(VdpDevice device,
 	if (!qt)
 		return VDP_STATUS_RESOURCES;
 
-	qt->drawable = drawable;
-	XSetWindowBackground(dev->display, drawable, 0x000102);
-
 	qt->disp = dev->disp;
 
 	if (!qt->disp)
 		return VDP_STATUS_ERROR;
 
 	qt->device = sref(dev);
+
+	qt->drawable_x = 0;
+	qt->drawable_y = 0;
+	qt->drawable_width = 0;
+	qt->drawable_height = 0;
+
+	qt->drawable = drawable;
+	XSelectInput(dev->display, drawable, StructureNotifyMask);
+
+	Window dummy;
+	XTranslateCoordinates(dev->display, qt->drawable, RootWindow(dev->display, dev->screen), 0, 0, &qt->x, &qt->y, &dummy);
+	XSetWindowBackground(dev->display, drawable, 0x000102);
+	XClearWindow(dev->display, drawable);
 
 	return handle_create(target, qt);
 }
