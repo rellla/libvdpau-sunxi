@@ -695,7 +695,7 @@ VdpStatus rgba_render_surface(rgba_surface_t **dest,
 		 */
 		else
 		{
-			tmp_hdl = rgba_get_free_surface(device, (*dest)->width, (*dest)->height, (*dest)->format, &tmp_rgba);
+			tmp_hdl = rgba_get_free_surface(device, width, height, format, &tmp_rgba);
 			rgba_prepare(tmp_rgba, NULL);
 
 			VDPAU_LOG(LDBG, "RBS: render nothing on a new surface!!!");
@@ -703,7 +703,7 @@ VdpStatus rgba_render_surface(rgba_surface_t **dest,
 			VdpRect tmp_d_rect = {0, 0, width, height};
 			rgba_do_render(tmp_rgba, &tmp_d_rect, src, &tmp_s_rect);
 			rgba_ref(device->cache, tmp_hdl);
-			(*dest)->flags |= RGBA_FLAG_DIRTY;
+			tmp_rgba->flags |= RGBA_FLAG_DIRTY;
 			*dest_hdl = rgba_set_recently_rendered(device->cache, tmp_hdl, dest);
 		}
 		pthread_mutex_unlock(&mutex);
