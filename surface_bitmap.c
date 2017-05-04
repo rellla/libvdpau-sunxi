@@ -97,6 +97,11 @@ VdpStatus vdp_bitmap_surface_put_bits_native(VdpBitmapSurface surface,
 	if (!out->device->osd_enabled)
 		return VDP_STATUS_OK;
 
+	if (destination_rect &&
+	    destination_rect->x0 == 0 && destination_rect->x1 == 0 &&
+	    destination_rect->y0 == 0 && destination_rect->y1 == 0)
+		return VDP_STATUS_OK;
+
 	VdpStatus ret;
 
 	/* We have not yet linked an rgba surface in the bitmap surface, so
@@ -118,7 +123,9 @@ VdpStatus vdp_bitmap_surface_put_bits_native(VdpBitmapSurface surface,
 			 *         but it is not visible nor queued for displaying yet:
 			 *      - simply put the bits on it
 			 */
-			ret = rgba_put_bits_native_regular(out->rgba, source_data, source_pitches, destination_rect);
+			ret = rgba_put_bits_native_regular(&out->rgba, &out->rgba_handle, out->device,
+							   source_data, source_pitches, destination_rect,
+							   out->width, out->height, out->format);
 		} else {
 			/* >= 2 times (it already got a put_bits_action, AND it's possible,
 			 *             that it is visible or queued for displaying yet,

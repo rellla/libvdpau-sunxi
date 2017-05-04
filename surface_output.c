@@ -25,7 +25,6 @@ static void cleanup_output_surface(void *ptr, void *meta)
 	output_surface_ctx_t *surface = ptr;
 
 	rgba_unref(surface->device->cache, surface->rgba_handle);
-	pthread_mutex_destroy(&surface->rgba_mutex);
 	pthread_mutex_destroy(&surface->mutex);
 
 	if (surface->yuv)
@@ -62,7 +61,6 @@ VdpStatus vdp_output_surface_create(VdpDevice device,
 	out->rgba = NULL;
 	out->rgba_handle = 0;
 
-	pthread_mutex_init(&out->rgba_mutex, NULL);
 	pthread_mutex_init(&out->mutex, NULL);
 	VDPAU_LOG(LDBG, "Create OS width: %d, height: %d", width, height);
 	return handle_create(surface, out);
@@ -113,6 +111,11 @@ VdpStatus vdp_output_surface_put_bits_native(VdpOutputSurface surface,
 	if (!out->device->osd_enabled)
 		return VDP_STATUS_OK;
 
+	if (destination_rect &&
+	    destination_rect->x0 == 0 && destination_rect->x1 == 0 &&
+	    destination_rect->y0 == 0 && destination_rect->y1 == 0)
+		return VDP_STATUS_OK;
+
 	VdpStatus ret;
 
 	/* We have not yet linked an rgba surface in the output surface, so
@@ -134,7 +137,9 @@ VdpStatus vdp_output_surface_put_bits_native(VdpOutputSurface surface,
 			 *         but it is not visible nor queued for displaying yet:
 			 *      - simply put the bits on it
 			 */
-			ret = rgba_put_bits_native_regular(out->rgba, source_data, source_pitches, destination_rect);
+			ret = rgba_put_bits_native_regular(&out->rgba, &out->rgba_handle, out->device,
+							   source_data, source_pitches, destination_rect,
+						           out->width, out->height, out->format);
 		} else {
 			/* >= 2 times (it already got a put_bits_action, AND it's possible,
 			 *             that it is visible or queued for displaying yet,
@@ -170,6 +175,11 @@ VdpStatus vdp_output_surface_put_bits_indexed(VdpOutputSurface surface,
 	if (!out->device->osd_enabled)
 		return VDP_STATUS_OK;
 
+	if (destination_rect &&
+	    destination_rect->x0 == 0 && destination_rect->x1 == 0 &&
+	    destination_rect->y0 == 0 && destination_rect->y1 == 0)
+		return VDP_STATUS_OK;
+
 	VdpStatus ret;
 
 	/* We have not yet linked an rgba surface in the output surface, so
@@ -192,8 +202,10 @@ VdpStatus vdp_output_surface_put_bits_indexed(VdpOutputSurface surface,
 			 *         but it is not visible nor queued for displaying yet:
 			 *      - simply put the bits on it
 			 */
-			ret = rgba_put_bits_indexed_regular(out->rgba, source_indexed_format, source_data, source_pitch,
-							    destination_rect, color_table_format, color_table);
+			ret = rgba_put_bits_indexed_regular(&out->rgba, &out->rgba_handle, out->device,
+							    source_indexed_format, source_data, source_pitch,
+							    destination_rect, color_table_format, color_table,
+							    out->width, out->height, out->format);
 		} else {
 			/* >= 2 times (it already got a put_bits_action, AND it's possible,
 			 *             that it is visible or queued for displaying yet,
@@ -252,7 +264,7 @@ VdpStatus vdp_output_surface_render_output_surface(VdpOutputSurface destination_
 	return rgba_render_surface(&out->rgba, &out->rgba_handle, destination_rect,
 				   in ? in->rgba : NULL, in ? in->rgba_handle : 0, source_rect,
 				   colors, blend_state, flags,
-				   out->width, out->height, out->format, out->device, out->rgba_mutex);
+				   out->width, out->height, out->format, out->device);
 }
 
 VdpStatus vdp_output_surface_render_bitmap_surface(VdpOutputSurface destination_surface,
@@ -275,7 +287,7 @@ VdpStatus vdp_output_surface_render_bitmap_surface(VdpOutputSurface destination_
 	return rgba_render_surface(&out->rgba, &out->rgba_handle, destination_rect,
 				   in ? in->rgba : NULL, in ? in->rgba_handle : 0, source_rect,
 				   colors, blend_state, flags,
-				   out->width, out->height, out->format, out->device, out->rgba_mutex);
+				   out->width, out->height, out->format, out->device);
 }
 
 VdpStatus vdp_output_surface_query_capabilities(VdpDevice device,

@@ -61,10 +61,15 @@ VdpStatus rgba_put_bits_native_copy(device_ctx_t *device,
                                     uint32_t const *source_pitches,
                                     VdpRect const *destination_rect);
 
-VdpStatus rgba_put_bits_native_regular(rgba_surface_t *rgba,
+VdpStatus rgba_put_bits_native_regular(rgba_surface_t **rgba,
+                                       int *rgba_handle,
+                                       device_ctx_t *device,
                                        void const *const *source_data,
                                        uint32_t const *source_pitches,
-                                       VdpRect const *destination_rect);
+                                       VdpRect const *destination_rect,
+                                       uint32_t width,
+                                       uint32_t height,
+                                       VdpRGBAFormat format);
 
 VdpStatus rgba_put_bits_indexed_new(device_ctx_t *device,
                                     int *rgba_handle,
@@ -92,13 +97,18 @@ VdpStatus rgba_put_bits_indexed_copy(device_ctx_t *device,
                                      VdpColorTableFormat color_table_format,
                                      void const *color_table);
 
-VdpStatus rgba_put_bits_indexed_regular(rgba_surface_t *rgba,
+VdpStatus rgba_put_bits_indexed_regular(rgba_surface_t **rgba,
+                                        int *rgba_handle,
+                                        device_ctx_t *device,
                                         VdpIndexedFormat source_indexed_format,
                                         void const *const *source_data,
                                         uint32_t const *source_pitch,
                                         VdpRect const *destination_rect,
                                         VdpColorTableFormat color_table_format,
-                                        void const *color_table);
+                                        void const *color_table,
+                                        uint32_t width,
+                                        uint32_t height,
+                                        VdpRGBAFormat format);
 
 VdpStatus rgba_render_surface(rgba_surface_t **dest,
                                      int *dest_hdl,
@@ -112,6 +122,5 @@ VdpStatus rgba_render_surface(rgba_surface_t **dest,
                                      uint32_t width,
                                      uint32_t height,
                                      VdpRGBAFormat format,
-                                     device_ctx_t *device,
-                                     pthread_mutex_t mutex);
+                                     device_ctx_t *device);
 #endif

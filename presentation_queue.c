@@ -311,8 +311,6 @@ static VdpStatus do_presentation_queue_display(queue_ctx_t *q, task_t *task)
 	if (!q->device->osd_enabled)
 		return VDP_STATUS_OK;
 
-	pthread_mutex_lock(&os->rgba_mutex);
-
 #ifdef CACHE_DEBUG
 	cache_list(os->device->cache, rgba_print_value);
 #endif
@@ -321,14 +319,13 @@ static VdpStatus do_presentation_queue_display(queue_ctx_t *q, task_t *task)
 	{
 		rgba_flush(os->rgba);
 		q->target->disp->set_osd_layer(q->target->disp, q->target->x, q->target->y, clip_width, clip_height, os);
-		VDPAU_LOG(LDBG2, "Display OSD layer");
+//		VDPAU_LOG(LDBG2, "Display OSD layer");
 	}
 	else
 	{
 		q->target->disp->close_osd_layer(q->target->disp);
-		VDPAU_LOG(LDBG2, "Close OSD layer");
+//		VDPAU_LOG(LDBG2, "Close OSD layer");
 	}
-	pthread_mutex_unlock(&os->rgba_mutex);
 
 	return VDP_STATUS_OK;
 }
@@ -405,12 +402,6 @@ static void *presentation_thread(void *param)
 			{
 				os_cur->first_presentation_time = lastvsync;
 				os_cur->status = VDP_PRESENTATION_QUEUE_STATUS_VISIBLE;
-				if (os_cur->device->osd_enabled && os_cur->rgba_handle)
-				{
-					pthread_mutex_lock(&os_cur->rgba_mutex);
-					/* reference the rgba, because it's visible now */
-					pthread_mutex_unlock(&os_cur->rgba_mutex);
-				}
 			}
 
 			if (os_prev)
@@ -423,12 +414,10 @@ static void *presentation_thread(void *param)
 
 				if (os_prev->device->osd_enabled && os_prev->rgba_handle)
 				{
-					pthread_mutex_lock(&os_prev->rgba_mutex);
 					/* unreference the rgba twice, because it's invisible again
 					   and not expected to be displayed on this output surface anymore */
 					rgba_unref(os_prev->device->cache, os_prev->rgba_handle);
 					os_prev->rgba->flags &= ~RGBA_FLAG_DIRTY;
-					pthread_mutex_unlock(&os_prev->rgba_mutex);
 				}
 
 				pthread_mutex_lock(&os_prev->mutex);

@@ -22,8 +22,10 @@
 
 #include <pthread.h>
 
+//#define CACHE_DEBUG 1
+
 typedef struct{
-	unsigned int refcount;
+	int refcount;
 	void *itemdata;
 } item;
 

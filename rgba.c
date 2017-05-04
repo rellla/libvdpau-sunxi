@@ -56,6 +56,7 @@ static VdpStatus rgba_create(rgba_surface_t *rgba,
 		rgba->id = 0;
 	}
 
+
 	return VDP_STATUS_OK;
 }
 
@@ -323,16 +324,28 @@ static int rgba_get_free_surface(device_ctx_t *device,
                           rgba_surface_t **rgba)
 {
 	int tmp_hdl;
-	rgba_surface_t *tmp_rgba;
+	rgba_surface_t *tmp_rgba = NULL;
 
-	tmp_hdl = cache_hdl_get(device->cache, (void *)rgba);
+	tmp_hdl = cache_hdl_get(device->cache, (void *)&tmp_rgba);
 	if (!tmp_hdl)
 	{
-		VDPAU_LOG(LDBG2, "create new rgba");
 		tmp_rgba = (rgba_surface_t *)calloc(1, sizeof(rgba_surface_t));
 		rgba_create(tmp_rgba, device, width, height, format);
 		rgba_prepare(tmp_rgba, NULL);
 		tmp_hdl = rgba_hdl_create(device->cache, tmp_rgba);
+		*rgba = tmp_rgba;
+	}
+	else
+	{
+		if ((tmp_rgba->width != width) || (tmp_rgba->height != height) || (tmp_rgba->format != format))
+		{
+			rgba_unref(device->cache, tmp_hdl);
+			tmp_rgba = (rgba_surface_t *)calloc(1, sizeof(rgba_surface_t));
+			rgba_create(tmp_rgba, device, width, height, format);
+			rgba_prepare(tmp_rgba, NULL);
+			tmp_hdl = rgba_hdl_create(device->cache, tmp_rgba);
+			*rgba = tmp_rgba;
+		}
 		*rgba = tmp_rgba;
 	}
 
@@ -367,7 +380,7 @@ static VdpStatus rgba_put_bits_native(rgba_surface_t *rgba,
 	if (destination_rect)
 		d_rect = *destination_rect;
 
-	/* Skip the copy, if d_rect is zerosized. mpv does this with it's preemtion implementation */
+	/* Skip the copy, if d_rect is zerosized. */
 	if (d_rect.x0 == 0 &&
 	    d_rect.x1 == 0 &&
 	    d_rect.y0 == 0 &&
@@ -414,6 +427,7 @@ VdpStatus rgba_put_bits_native_new(device_ctx_t *device,
 	rgba_surface_t *tmp_rgba;
 
 	tmp_handle = rgba_get_free_surface(device, width, height, format, &tmp_rgba);
+
 	rgba_ref(device->cache, tmp_handle);
 	ret = rgba_put_bits_native(tmp_rgba, source_data, source_pitches, destination_rect);
 	*rgba_handle = tmp_handle;
@@ -440,6 +454,7 @@ VdpStatus rgba_put_bits_native_copy(device_ctx_t *device,
 	rgba_surface_t *tmp_rgba;
 
 	tmp_handle = rgba_get_free_surface(device, width, height, format, &tmp_rgba);
+
 	rgba_prepare(tmp_rgba, *rgba);
 	ret = rgba_put_bits_native(tmp_rgba, source_data, source_pitches, destination_rect);
 	rgba_unref(device->cache, *rgba_handle);
@@ -452,16 +467,37 @@ VdpStatus rgba_put_bits_native_copy(device_ctx_t *device,
 	return ret;
 }
 
-VdpStatus rgba_put_bits_native_regular(rgba_surface_t *rgba,
+VdpStatus rgba_put_bits_native_regular(rgba_surface_t **rgba,
+                                       int *rgba_handle,
+                                       device_ctx_t *device,
                                        void const *const *source_data,
                                        uint32_t const *source_pitches,
-                                       VdpRect const *destination_rect)
+                                       VdpRect const *destination_rect,
+                                       uint32_t width,
+                                       uint32_t height,
+                                       VdpRGBAFormat format)
 {
 	VdpStatus ret;
 
-	ret = rgba_put_bits_native(rgba, source_data, source_pitches, destination_rect);
+	int tmp_handle;
+	rgba_surface_t *tmp_rgba;
 
-	VDPAU_LOG(LDBG, "PBN id: %d on a same surface (with ref=1)", rgba->id + 1);
+	VDPAU_LOG(LDBG, "%d %d - %d %d", (*rgba)->width, (*rgba)->height, width, height);
+	if (((*rgba)->width != width) || ((*rgba)->height != height) || ((*rgba)->format != format))
+	{
+		tmp_handle = rgba_get_free_surface(device, width, height, format, &tmp_rgba);
+		rgba_unref(device->cache, *rgba_handle);
+
+		ret = rgba_put_bits_native(tmp_rgba, source_data, source_pitches, destination_rect);
+		rgba_ref(device->cache, tmp_handle);
+
+		*rgba_handle = tmp_handle;
+		rgba_get_pointer(device->cache, tmp_handle, rgba);
+	}
+	else
+		ret = rgba_put_bits_native(*rgba, source_data, source_pitches, destination_rect);
+
+	VDPAU_LOG(LDBG, "PBN id: %d on a same surface (with ref=1)", (*rgba)->id + 1);
 
 	return ret;
 }
@@ -478,6 +514,7 @@ static VdpStatus rgba_put_bits_indexed(rgba_surface_t *rgba,
 		return VDP_STATUS_INVALID_COLOR_TABLE_FORMAT;
 
 	VdpStatus ret;
+
 	ret = rgba_prepare(rgba, NULL);
 	if (ret != VDP_STATUS_OK)
 		return ret;
@@ -491,7 +528,7 @@ static VdpStatus rgba_put_bits_indexed(rgba_surface_t *rgba,
 	if (destination_rect)
 		d_rect = *destination_rect;
 
-	/* Skip the copy, if d_rect is zerosized. mpv does this with it's preemtion implementation */
+	/* Skip the copy, if d_rect is zerosized.*/
 	if (d_rect.x0 == 0 &&
 	    d_rect.x1 == 0 &&
 	    d_rect.y0 == 0 &&
@@ -552,6 +589,7 @@ VdpStatus rgba_put_bits_indexed_new(device_ctx_t *device,
 	rgba_surface_t *tmp_rgba;
 
 	tmp_handle = rgba_get_free_surface(device, width, height, format, &tmp_rgba);
+
 	rgba_ref(device->cache, tmp_handle);
 	ret = rgba_put_bits_indexed(tmp_rgba, source_indexed_format, source_data, source_pitch,
 				    destination_rect, color_table_format, color_table);
@@ -582,6 +620,7 @@ VdpStatus rgba_put_bits_indexed_copy(device_ctx_t *device,
 	rgba_surface_t *tmp_rgba;
 
 	tmp_handle = rgba_get_free_surface(device, width, height, format, &tmp_rgba);
+
 	rgba_prepare(tmp_rgba, *rgba);
 	ret = rgba_put_bits_indexed(tmp_rgba, source_indexed_format, source_data, source_pitch,
 			            destination_rect, color_table_format, color_table);
@@ -595,20 +634,42 @@ VdpStatus rgba_put_bits_indexed_copy(device_ctx_t *device,
 	return ret;
 }
 
-VdpStatus rgba_put_bits_indexed_regular(rgba_surface_t *rgba,
+VdpStatus rgba_put_bits_indexed_regular(rgba_surface_t **rgba,
+                                        int *rgba_handle,
+                                        device_ctx_t *device,
                                         VdpIndexedFormat source_indexed_format,
                                         void const *const *source_data,
                                         uint32_t const *source_pitch,
                                         VdpRect const *destination_rect,
                                         VdpColorTableFormat color_table_format,
-                                        void const *color_table)
+                                        void const *color_table,
+                                        uint32_t width,
+                                        uint32_t height,
+                                        VdpRGBAFormat format)
 {
 	VdpStatus ret;
 
-	ret = rgba_put_bits_indexed(rgba, source_indexed_format, source_data, source_pitch,
-              destination_rect, color_table_format, color_table);
+	int tmp_handle;
+	rgba_surface_t *tmp_rgba;
 
-	VDPAU_LOG(LDBG, "PBI id: %d on a same surface (with ref=1)", rgba->id + 1);
+	if (((*rgba)->width != width) || ((*rgba)->height != height) || ((*rgba)->format != format))
+	{
+		tmp_handle = rgba_get_free_surface(device, width, height, format, &tmp_rgba);
+
+		rgba_unref(device->cache, *rgba_handle);
+		ret = rgba_put_bits_indexed(tmp_rgba, source_indexed_format, source_data, source_pitch,
+					    destination_rect, color_table_format, color_table);
+
+		rgba_ref(device->cache, tmp_handle);
+		*rgba_handle = tmp_handle;
+		rgba_get_pointer(device->cache, tmp_handle, rgba);
+	}
+	else
+		ret = rgba_put_bits_indexed(*rgba, source_indexed_format, source_data, source_pitch,
+					    destination_rect, color_table_format, color_table);
+
+	VDPAU_LOG(LDBG, "PBI id: %d on a same surface (with ref=1)", (*rgba)->id + 1);
+
 
 	return ret;
 }
@@ -665,8 +726,7 @@ VdpStatus rgba_render_surface(rgba_surface_t **dest,
                                      uint32_t width,
                                      uint32_t height,
                                      VdpRGBAFormat format,
-                                     device_ctx_t *device,
-                                     pthread_mutex_t mutex)
+                                     device_ctx_t *device)
 {
 	if (colors || flags)
 		VDPAU_LOG(LWARN, "%s: colors and flags not implemented!", __func__);
@@ -674,17 +734,15 @@ VdpStatus rgba_render_surface(rgba_surface_t **dest,
 	rgba_surface_t *tmp_rgba = NULL;
 	int tmp_hdl = 0;
 
-
 	/* We never rendered something into the dest surface,
 	   so just link and reference the source surface */
 	if ((*dest == NULL) || (dest_hdl == 0))
 	{
-		pthread_mutex_lock(&mutex);
 		/* Set pointer to the src surface and reference it */
 		if (src_hdl != 0)
 		{
-			*dest_hdl = rgba_set_recently_rendered(device->cache, src_hdl, dest);
 			VDPAU_LOG(LDBG2, "RBS: no rgba surface yet, so just link and reference it");
+			*dest_hdl = rgba_set_recently_rendered(device->cache, src_hdl, dest);
 			rgba_ref(device->cache, *dest_hdl);
 			(*dest)->flags |= RGBA_FLAG_DIRTY;
 		}
@@ -699,10 +757,10 @@ VdpStatus rgba_render_surface(rgba_surface_t **dest,
 		 */
 		else
 		{
+			VDPAU_LOG(LDBG, "RBS: render nothing on a new surface!!!");
 			tmp_hdl = rgba_get_free_surface(device, width, height, format, &tmp_rgba);
 			rgba_prepare(tmp_rgba, NULL);
 
-			VDPAU_LOG(LDBG, "RBS: render nothing on a new surface!!!");
 			VdpRect tmp_s_rect = {0, 0, 0, 0};
 			VdpRect tmp_d_rect = {0, 0, width, height};
 			rgba_do_render(tmp_rgba, &tmp_d_rect, src, &tmp_s_rect);
@@ -710,7 +768,6 @@ VdpStatus rgba_render_surface(rgba_surface_t **dest,
 			tmp_rgba->flags |= RGBA_FLAG_DIRTY;
 			*dest_hdl = rgba_set_recently_rendered(device->cache, tmp_hdl, dest);
 		}
-		pthread_mutex_unlock(&mutex);
 
 		return VDP_STATUS_OK;
 	}
@@ -731,8 +788,6 @@ VdpStatus rgba_render_surface(rgba_surface_t **dest,
 	    d_rect.x0 == d_rect.x1 || d_rect.y0 == d_rect.y1)
 		return VDP_STATUS_OK;
 
-	pthread_mutex_lock(&mutex);
-
 	/* Get the surface, which was last recently rendered */
 	tmp_hdl = rgba_get_recently_rendered(device->cache, &tmp_rgba);
 
@@ -749,10 +804,9 @@ VdpStatus rgba_render_surface(rgba_surface_t **dest,
 		rgba_ref(device->cache, *dest_hdl);
 		(*dest)->flags |= RGBA_FLAG_DIRTY;
 
-		pthread_mutex_unlock(&mutex);
-
 		return VDP_STATUS_OK;
 	}
+
 
 	/* We have a different rendering action than the last time and
 	 * the current rgba is referenced from any surface:
@@ -776,8 +830,6 @@ VdpStatus rgba_render_surface(rgba_surface_t **dest,
 		(*dest)->flags |= RGBA_FLAG_DIRTY;
 		*dest_hdl = rgba_set_recently_rendered(device->cache, tmp_hdl, dest);
 	}
-
-	pthread_mutex_unlock(&mutex);
 
 	return VDP_STATUS_OK;
 }

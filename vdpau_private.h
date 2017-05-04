@@ -164,7 +164,7 @@ typedef struct output_surface_ctx_struct
 	float hue;
 	VdpTime first_presentation_time;
 	VdpPresentationQueueStatus status;
-	pthread_mutex_t mutex, rgba_mutex;
+	pthread_mutex_t mutex;
 	pthread_cond_t cond;
 	int reinit_disp;
 } output_surface_ctx_t;
