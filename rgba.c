@@ -31,10 +31,10 @@
  * Rgba helper functions
  */
 static VdpStatus rgba_create(rgba_surface_t *rgba,
-                      device_ctx_t *device,
-                      uint32_t width,
-                      uint32_t height,
-                      VdpRGBAFormat format)
+                             device_ctx_t *device,
+                             uint32_t width,
+                             uint32_t height,
+                             VdpRGBAFormat format)
 {
 	if (format != VDP_RGBA_FORMAT_B8G8R8A8 && format != VDP_RGBA_FORMAT_R8G8B8A8)
 		return VDP_STATUS_INVALID_RGBA_FORMAT;
@@ -55,7 +55,6 @@ static VdpStatus rgba_create(rgba_surface_t *rgba,
 		rgba->dirty.y1 = 0;
 		rgba->id = 0;
 	}
-
 
 	return VDP_STATUS_OK;
 }
@@ -160,7 +159,7 @@ static void rgba_duplicate_attribs(rgba_surface_t *dest, rgba_surface_t *src)
 	dest->dirty.y1 = src->dirty.y1;
 }
 
-static VdpStatus rgba_prepare(rgba_surface_t *dest, rgba_surface_t *src)
+static VdpStatus rgba_prepare(rgba_surface_t *dest)
 {
 	if (dest == NULL)
 		return VDP_STATUS_RESOURCES;
@@ -177,30 +176,32 @@ static VdpStatus rgba_prepare(rgba_surface_t *dest, rgba_surface_t *src)
 		rgba_fill(dest, NULL, 0x00000000);
 	}
 
-	if (src != NULL)
-	{
-		/* Skip, if we have no dirty area */
-		if ((src->dirty.x0 >= src->dirty.x1) || (src->dirty.y0 >= src->dirty.y1))
-			return VDP_STATUS_OK;
+	return VDP_STATUS_OK;
+}
 
-		/* copy full width dirty area */
-		if (src->dirty.x0 == 0 && src->dirty.x1 == src->width)
-			memcpy(cedrus_mem_get_pointer(dest->data) + src->dirty.y0 * src->width * 4,
-			       cedrus_mem_get_pointer(src->data) + src->dirty.y0 * src->width * 4,
-			       (src->dirty.x1 - src->dirty.x0) * (src->dirty.y1 - src->dirty.y0) * 4);
-		else {
-		/* copy full dirty rect */
-			unsigned int y;
-			for (y = src->dirty.y0; y < src->dirty.y1; y ++)
-				memcpy(cedrus_mem_get_pointer(dest->data) + (y * src->width + src->dirty.x0) * 4,
-				       cedrus_mem_get_pointer(src->data)  + (y * src->width + src->dirty.x0) * 4,
-				       (src->dirty.x1 - src->dirty.x0) * 4);
-		}
+static void rgba_duplicate(rgba_surface_t *dest, rgba_surface_t *src)
+{
+	/* Skip, if we have no dirty area */
+	if ((src->dirty.x0 >= src->dirty.x1) || (src->dirty.y0 >= src->dirty.y1))
+		return;
 
-		rgba_duplicate_attribs(dest, src);
+	/* copy full width dirty area */
+	if (src->dirty.x0 == 0 && src->dirty.x1 == src->width)
+		memcpy(cedrus_mem_get_pointer(dest->data) + src->dirty.y0 * src->width * 4,
+		       cedrus_mem_get_pointer(src->data) + src->dirty.y0 * src->width * 4,
+		       (src->dirty.x1 - src->dirty.x0) * (src->dirty.y1 - src->dirty.y0) * 4);
+	else {
+	/* copy full dirty rect */
+		unsigned int y;
+		for (y = src->dirty.y0; y < src->dirty.y1; y ++)
+			memcpy(cedrus_mem_get_pointer(dest->data) + (y * src->width + src->dirty.x0) * 4,
+			       cedrus_mem_get_pointer(src->data)  + (y * src->width + src->dirty.x0) * 4,
+			       (src->dirty.x1 - src->dirty.x0) * 4);
 	}
 
-	return VDP_STATUS_OK;
+	rgba_duplicate_attribs(dest, src);
+
+	return;
 }
 
 static int rect_changed(VdpRect const *rect1, VdpRect rect2)
@@ -318,36 +319,35 @@ static int rgba_hdl_create(CACHE *cache, rgba_surface_t *rgba)
 }
 
 static int rgba_get_free_surface(device_ctx_t *device,
-                          uint32_t width,
-                          uint32_t height,
-                          VdpRGBAFormat format,
-                          rgba_surface_t **rgba)
+                                 uint32_t width,
+                                 uint32_t height,
+                                 VdpRGBAFormat format,
+                                 rgba_surface_t **rgba)
 {
 	int tmp_hdl;
 	rgba_surface_t *tmp_rgba = NULL;
 
 	tmp_hdl = cache_hdl_get(device->cache, (void *)&tmp_rgba);
+
 	if (!tmp_hdl)
 	{
 		tmp_rgba = (rgba_surface_t *)calloc(1, sizeof(rgba_surface_t));
 		rgba_create(tmp_rgba, device, width, height, format);
-		rgba_prepare(tmp_rgba, NULL);
+		rgba_prepare(tmp_rgba);
 		tmp_hdl = rgba_hdl_create(device->cache, tmp_rgba);
-		*rgba = tmp_rgba;
 	}
-	else
+
+	if (tmp_hdl && ((tmp_rgba->width != width) || (tmp_rgba->height != height) || (tmp_rgba->format != format)))
 	{
-		if ((tmp_rgba->width != width) || (tmp_rgba->height != height) || (tmp_rgba->format != format))
-		{
-			rgba_unref(device->cache, tmp_hdl);
-			tmp_rgba = (rgba_surface_t *)calloc(1, sizeof(rgba_surface_t));
-			rgba_create(tmp_rgba, device, width, height, format);
-			rgba_prepare(tmp_rgba, NULL);
-			tmp_hdl = rgba_hdl_create(device->cache, tmp_rgba);
-			*rgba = tmp_rgba;
-		}
-		*rgba = tmp_rgba;
+		rgba_unref(device->cache, tmp_hdl);
+
+		tmp_rgba = (rgba_surface_t *)calloc(1, sizeof(rgba_surface_t));
+		rgba_create(tmp_rgba, device, width, height, format);
+		rgba_prepare(tmp_rgba);
+		tmp_hdl = rgba_hdl_create(device->cache, tmp_rgba);
 	}
+
+	rgba_get_pointer(device->cache, tmp_hdl, rgba);
 
 	return tmp_hdl;
 }
@@ -371,11 +371,6 @@ static VdpStatus rgba_put_bits_native(rgba_surface_t *rgba,
                                       uint32_t const *source_pitches,
                                       VdpRect const *destination_rect)
 {
-	VdpStatus ret;
-	ret = rgba_prepare(rgba, NULL);
-	if (ret != VDP_STATUS_OK)
-		return ret;
-
 	VdpRect d_rect = {0, 0, rgba->width, rgba->height};
 	if (destination_rect)
 		d_rect = *destination_rect;
@@ -428,8 +423,10 @@ VdpStatus rgba_put_bits_native_new(device_ctx_t *device,
 
 	tmp_handle = rgba_get_free_surface(device, width, height, format, &tmp_rgba);
 
-	rgba_ref(device->cache, tmp_handle);
+	rgba_prepare(tmp_rgba);
 	ret = rgba_put_bits_native(tmp_rgba, source_data, source_pitches, destination_rect);
+
+	rgba_ref(device->cache, tmp_handle);
 	*rgba_handle = tmp_handle;
 	rgba_get_pointer(device->cache, tmp_handle, rgba);
 
@@ -455,9 +452,11 @@ VdpStatus rgba_put_bits_native_copy(device_ctx_t *device,
 
 	tmp_handle = rgba_get_free_surface(device, width, height, format, &tmp_rgba);
 
-	rgba_prepare(tmp_rgba, *rgba);
+	rgba_prepare(tmp_rgba);
+	rgba_duplicate(tmp_rgba, *rgba);
 	ret = rgba_put_bits_native(tmp_rgba, source_data, source_pitches, destination_rect);
 	rgba_unref(device->cache, *rgba_handle);
+
 	rgba_ref(device->cache, tmp_handle);
 	*rgba_handle = tmp_handle;
 	rgba_get_pointer(device->cache, tmp_handle, rgba);
@@ -482,22 +481,22 @@ VdpStatus rgba_put_bits_native_regular(rgba_surface_t **rgba,
 	int tmp_handle;
 	rgba_surface_t *tmp_rgba;
 
-	VDPAU_LOG(LDBG, "%d %d - %d %d", (*rgba)->width, (*rgba)->height, width, height);
 	if (((*rgba)->width != width) || ((*rgba)->height != height) || ((*rgba)->format != format))
 	{
 		tmp_handle = rgba_get_free_surface(device, width, height, format, &tmp_rgba);
+
+		rgba_prepare(tmp_rgba);
+		ret = rgba_put_bits_native(tmp_rgba, source_data, source_pitches, destination_rect);
 		rgba_unref(device->cache, *rgba_handle);
 
-		ret = rgba_put_bits_native(tmp_rgba, source_data, source_pitches, destination_rect);
 		rgba_ref(device->cache, tmp_handle);
-
 		*rgba_handle = tmp_handle;
 		rgba_get_pointer(device->cache, tmp_handle, rgba);
 	}
 	else
 		ret = rgba_put_bits_native(*rgba, source_data, source_pitches, destination_rect);
 
-	VDPAU_LOG(LDBG, "PBN id: %d on a same surface (with ref=1)", (*rgba)->id + 1);
+	VDPAU_LOG(LDBG, "PBI id: %d on a same surface (with ref=1)", (*rgba)->id + 1);
 
 	return ret;
 }
@@ -512,12 +511,6 @@ static VdpStatus rgba_put_bits_indexed(rgba_surface_t *rgba,
 {
 	if (color_table_format != VDP_COLOR_TABLE_FORMAT_B8G8R8X8)
 		return VDP_STATUS_INVALID_COLOR_TABLE_FORMAT;
-
-	VdpStatus ret;
-
-	ret = rgba_prepare(rgba, NULL);
-	if (ret != VDP_STATUS_OK)
-		return ret;
 
 	int x, y;
 	const uint32_t *colormap = color_table;
@@ -590,9 +583,11 @@ VdpStatus rgba_put_bits_indexed_new(device_ctx_t *device,
 
 	tmp_handle = rgba_get_free_surface(device, width, height, format, &tmp_rgba);
 
-	rgba_ref(device->cache, tmp_handle);
+	rgba_prepare(tmp_rgba);
 	ret = rgba_put_bits_indexed(tmp_rgba, source_indexed_format, source_data, source_pitch,
 				    destination_rect, color_table_format, color_table);
+
+	rgba_ref(device->cache, tmp_handle);
 	*rgba_handle = tmp_handle;
 	rgba_get_pointer(device->cache, tmp_handle, rgba);
 
@@ -621,10 +616,12 @@ VdpStatus rgba_put_bits_indexed_copy(device_ctx_t *device,
 
 	tmp_handle = rgba_get_free_surface(device, width, height, format, &tmp_rgba);
 
-	rgba_prepare(tmp_rgba, *rgba);
+	rgba_prepare(tmp_rgba);
+	rgba_duplicate(tmp_rgba, *rgba);
 	ret = rgba_put_bits_indexed(tmp_rgba, source_indexed_format, source_data, source_pitch,
 			            destination_rect, color_table_format, color_table);
 	rgba_unref(device->cache, *rgba_handle);
+
 	rgba_ref(device->cache, tmp_handle);
 	*rgba_handle = tmp_handle;
 	rgba_get_pointer(device->cache, tmp_handle, rgba);
@@ -656,9 +653,10 @@ VdpStatus rgba_put_bits_indexed_regular(rgba_surface_t **rgba,
 	{
 		tmp_handle = rgba_get_free_surface(device, width, height, format, &tmp_rgba);
 
-		rgba_unref(device->cache, *rgba_handle);
+		rgba_prepare(tmp_rgba);
 		ret = rgba_put_bits_indexed(tmp_rgba, source_indexed_format, source_data, source_pitch,
 					    destination_rect, color_table_format, color_table);
+		rgba_unref(device->cache, *rgba_handle);
 
 		rgba_ref(device->cache, tmp_handle);
 		*rgba_handle = tmp_handle;
@@ -715,18 +713,18 @@ static VdpStatus rgba_do_render(rgba_surface_t *dest,
 }
 
 VdpStatus rgba_render_surface(rgba_surface_t **dest,
-                                     int *dest_hdl,
-                                     VdpRect const *destination_rect,
-                                     rgba_surface_t *src,
-                                     int src_hdl,
-                                     VdpRect const *source_rect,
-                                     VdpColor const *colors,
-                                     VdpOutputSurfaceRenderBlendState const *blend_state,
-                                     uint32_t flags,
-                                     uint32_t width,
-                                     uint32_t height,
-                                     VdpRGBAFormat format,
-                                     device_ctx_t *device)
+                              int *dest_hdl,
+                              VdpRect const *destination_rect,
+                              rgba_surface_t *src,
+                              int src_hdl,
+                              VdpRect const *source_rect,
+                              VdpColor const *colors,
+                              VdpOutputSurfaceRenderBlendState const *blend_state,
+                              uint32_t flags,
+                              uint32_t width,
+                              uint32_t height,
+                              VdpRGBAFormat format,
+                              device_ctx_t *device)
 {
 	if (colors || flags)
 		VDPAU_LOG(LWARN, "%s: colors and flags not implemented!", __func__);
@@ -743,31 +741,29 @@ VdpStatus rgba_render_surface(rgba_surface_t **dest,
 		{
 			VDPAU_LOG(LDBG2, "RBS: no rgba surface yet, so just link and reference it");
 			*dest_hdl = rgba_set_recently_rendered(device->cache, src_hdl, dest);
-			rgba_ref(device->cache, *dest_hdl);
-			(*dest)->flags |= RGBA_FLAG_DIRTY;
 		}
 		/* We have not even a src surface, so
 		 *   - get a free surface
-		 *   - render to it with src=NULL, 
+		 *   - render to it with src=NULL,
 		 *     which makes a rgba_fill to the complete rect with all colors treated to 1.0
 		 *   - reference the new surface
 		 *   - set it as the last recently rendered one
-		 *
-		 *   This is a special case, which should be avoided.
 		 */
 		else
 		{
-			VDPAU_LOG(LDBG, "RBS: render nothing on a new surface!!!");
+			VDPAU_LOG(LDBG2, "RBS: render nothing on a new surface!!!");
 			tmp_hdl = rgba_get_free_surface(device, width, height, format, &tmp_rgba);
-			rgba_prepare(tmp_rgba, NULL);
+			rgba_prepare(tmp_rgba);
 
 			VdpRect tmp_s_rect = {0, 0, 0, 0};
 			VdpRect tmp_d_rect = {0, 0, width, height};
 			rgba_do_render(tmp_rgba, &tmp_d_rect, src, &tmp_s_rect);
-			rgba_ref(device->cache, tmp_hdl);
-			tmp_rgba->flags |= RGBA_FLAG_DIRTY;
+
 			*dest_hdl = rgba_set_recently_rendered(device->cache, tmp_hdl, dest);
 		}
+
+		rgba_ref(device->cache, *dest_hdl);
+		(*dest)->flags |= RGBA_FLAG_DIRTY;
 
 		return VDP_STATUS_OK;
 	}
@@ -807,29 +803,27 @@ VdpStatus rgba_render_surface(rgba_surface_t **dest,
 		return VDP_STATUS_OK;
 	}
 
-
 	/* We have a different rendering action than the last time and
-	 * the current rgba is referenced from any surface:
+	 * the current rgba is referenced at least one time:
 	 *    - get a free rgba from the cache
 	 *    - copy the current dest rgba (dirty area and attributes)
 	 *      into that new rgba (via memcpy)
 	 *    - render the src surface into that new rgba
 	 *    - unreference the currently linked rgba (dest rgba)
 	 *    - append the new rgba to the surface and reference it
+	 *    - Note: (*dest != NULL && dest_hdl != 0)
 	 */
 	VDPAU_LOG(LDBG, "RBS: RGBA change -> new blit!");
-	if (rgba_get_refcount(device->cache, *dest_hdl) > 0)
-	{
-		tmp_hdl = rgba_get_free_surface(device, width, height, format, &tmp_rgba);
-		rgba_prepare(tmp_rgba, *dest);
+	tmp_hdl = rgba_get_free_surface(device, width, height, format, &tmp_rgba);
 
-		VDPAU_LOG(LDBG, "RBS: render it on a new surface, copy the old");
-		rgba_do_render(tmp_rgba, &d_rect, src, &s_rect);
-		rgba_unref(device->cache, *dest_hdl);
-		rgba_ref(device->cache, tmp_hdl);
-		(*dest)->flags |= RGBA_FLAG_DIRTY;
-		*dest_hdl = rgba_set_recently_rendered(device->cache, tmp_hdl, dest);
-	}
+	rgba_prepare(tmp_rgba);
+	rgba_duplicate(tmp_rgba, *dest);
+	rgba_do_render(tmp_rgba, &d_rect, src, &s_rect);
+	rgba_unref(device->cache, *dest_hdl);
+
+	rgba_ref(device->cache, tmp_hdl);
+	(*dest)->flags |= RGBA_FLAG_DIRTY;
+	*dest_hdl = rgba_set_recently_rendered(device->cache, tmp_hdl, dest);
 
 	return VDP_STATUS_OK;
 }
