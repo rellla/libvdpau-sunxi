@@ -822,8 +822,8 @@ VdpStatus rgba_render_surface(rgba_surface_t **dest,
 	rgba_unref(device->cache, *dest_hdl);
 
 	rgba_ref(device->cache, tmp_hdl);
-	(*dest)->flags |= RGBA_FLAG_DIRTY | RGBA_FLAG_NEEDS_RENDER;
 	*dest_hdl = rgba_set_recently_rendered(device->cache, tmp_hdl, dest);
+	(*dest)->flags |= RGBA_FLAG_DIRTY | RGBA_FLAG_NEEDS_RENDER;
 
 	return VDP_STATUS_OK;
 }
