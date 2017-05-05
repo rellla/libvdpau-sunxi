@@ -726,8 +726,8 @@ VdpStatus rgba_render_surface(rgba_surface_t **dest,
                               VdpRGBAFormat format,
                               device_ctx_t *device)
 {
-	if (colors || flags)
-		VDPAU_LOG(LWARN, "%s: colors and flags not implemented!", __func__);
+//	if (colors || flags)
+//		VDPAU_LOG(LWARN, "%s: colors and flags not implemented!", __func__);
 
 	rgba_surface_t *tmp_rgba = NULL;
 	int tmp_hdl = 0;
@@ -763,7 +763,7 @@ VdpStatus rgba_render_surface(rgba_surface_t **dest,
 		}
 
 		rgba_ref(device->cache, *dest_hdl);
-		(*dest)->flags |= RGBA_FLAG_DIRTY;
+		(*dest)->flags |= RGBA_FLAG_DIRTY | RGBA_FLAG_NEEDS_RENDER;
 
 		return VDP_STATUS_OK;
 	}
@@ -798,7 +798,7 @@ VdpStatus rgba_render_surface(rgba_surface_t **dest,
 
 		*dest_hdl = rgba_set_recently_rendered(device->cache, tmp_hdl, dest);
 		rgba_ref(device->cache, *dest_hdl);
-		(*dest)->flags |= RGBA_FLAG_DIRTY;
+		(*dest)->flags |= RGBA_FLAG_DIRTY | RGBA_FLAG_NEEDS_RENDER;
 
 		return VDP_STATUS_OK;
 	}
@@ -822,7 +822,7 @@ VdpStatus rgba_render_surface(rgba_surface_t **dest,
 	rgba_unref(device->cache, *dest_hdl);
 
 	rgba_ref(device->cache, tmp_hdl);
-	(*dest)->flags |= RGBA_FLAG_DIRTY;
+	(*dest)->flags |= RGBA_FLAG_DIRTY | RGBA_FLAG_NEEDS_RENDER;
 	*dest_hdl = rgba_set_recently_rendered(device->cache, tmp_hdl, dest);
 
 	return VDP_STATUS_OK;

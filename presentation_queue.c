@@ -315,16 +315,16 @@ static VdpStatus do_presentation_queue_display(queue_ctx_t *q, task_t *task)
 	cache_list(os->device->cache, rgba_print_value);
 #endif
 
-	if (os->rgba_handle && (os->rgba->flags & RGBA_FLAG_DIRTY))
+	if (os->rgba_handle && (os->rgba->flags & RGBA_FLAG_DIRTY) && (os->rgba->flags & RGBA_FLAG_NEEDS_RENDER))
 	{
 		rgba_flush(os->rgba);
 		q->target->disp->set_osd_layer(q->target->disp, q->target->x, q->target->y, clip_width, clip_height, os);
-//		VDPAU_LOG(LDBG2, "Display OSD layer");
+		VDPAU_LOG(LDBG2, "Display OSD layer");
 	}
 	else
 	{
 		q->target->disp->close_osd_layer(q->target->disp);
-//		VDPAU_LOG(LDBG2, "Close OSD layer");
+		VDPAU_LOG(LDBG2, "Close OSD layer");
 	}
 
 	return VDP_STATUS_OK;
@@ -417,7 +417,7 @@ static void *presentation_thread(void *param)
 					/* unreference the rgba twice, because it's invisible again
 					   and not expected to be displayed on this output surface anymore */
 					rgba_unref(os_prev->device->cache, os_prev->rgba_handle);
-					os_prev->rgba->flags &= ~RGBA_FLAG_DIRTY;
+					os_prev->rgba->flags &= ~RGBA_FLAG_NEEDS_RENDER;
 				}
 
 				pthread_mutex_lock(&os_prev->mutex);
