@@ -39,6 +39,7 @@ void rgba_print_value(void *itemdata);
 /*
  * Rgba helper functions
  */
+void rgba_clear(rgba_surface_t *rgba);
 void rgba_flush(rgba_surface_t *rgba);
 
 VdpStatus rgba_put_bits_native_new(device_ctx_t *device,

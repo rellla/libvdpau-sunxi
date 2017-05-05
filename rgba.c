@@ -27,9 +27,27 @@
 #include "rgba_g2d.h"
 #include "cache.h"
 
+//#define DUMP 1
+
 /*
  * Rgba helper functions
  */
+
+void dump_rgba(rgba_surface_t *rgba)
+{
+#ifdef DUMP
+	static int l;
+	FILE *fp;
+	char filename[sizeof("/srv/public/osd999.rgba")];
+	sprintf(filename, "/srv/public/osd%03d.rgba", l);
+	l++;
+	fp = fopen(filename, "w+");
+	fwrite(cedrus_mem_get_pointer(rgba->data), 4, rgba->width * rgba->height, fp);
+	fclose(fp);
+#endif
+	return;
+}
+
 static VdpStatus rgba_create(rgba_surface_t *rgba,
                              device_ctx_t *device,
                              uint32_t width,
@@ -122,13 +140,17 @@ static void rgba_blit(rgba_surface_t *dest, const VdpRect *dest_rect, rgba_surfa
 	}
 }
 
-static void rgba_clear(rgba_surface_t *rgba)
+void rgba_clear(rgba_surface_t *rgba)
 {
 	if (!(rgba->flags & RGBA_FLAG_DIRTY))
 		return;
 
+	if (!(rgba->flags & RGBA_FLAG_NEEDS_CLEAR))
+		return;
+
 	rgba_fill(rgba, &rgba->dirty, 0x00000000);
 	rgba->flags &= ~RGBA_FLAG_DIRTY;
+	rgba->flags &= ~RGBA_FLAG_NEEDS_CLEAR;
 	rgba->dirty.x0 = rgba->width;
 	rgba->dirty.y0 = rgba->height;
 	rgba->dirty.x1 = 0;
@@ -297,7 +319,10 @@ void rgba_unref(CACHE *cache, int rgba_hdl)
 	rgba_get_pointer(cache, rgba_hdl, &rgba);
 
 	if (cache_hdl_get_ref(rgba_hdl, cache) == 1)
+	{
+		rgba->flags |= RGBA_FLAG_NEEDS_CLEAR;
 		rgba_clear(rgba);
+	}
 
 	cache_hdl_unref(rgba_hdl, cache, rgba_destroy);
 }
@@ -764,6 +789,7 @@ VdpStatus rgba_render_surface(rgba_surface_t **dest,
 
 		rgba_ref(device->cache, *dest_hdl);
 		(*dest)->flags |= RGBA_FLAG_DIRTY | RGBA_FLAG_NEEDS_RENDER;
+		(*dest)->flags &= ~RGBA_FLAG_NEEDS_CLEAR;
 
 		return VDP_STATUS_OK;
 	}
@@ -799,6 +825,7 @@ VdpStatus rgba_render_surface(rgba_surface_t **dest,
 		*dest_hdl = rgba_set_recently_rendered(device->cache, tmp_hdl, dest);
 		rgba_ref(device->cache, *dest_hdl);
 		(*dest)->flags |= RGBA_FLAG_DIRTY | RGBA_FLAG_NEEDS_RENDER;
+		(*dest)->flags &= ~RGBA_FLAG_NEEDS_CLEAR;
 
 		return VDP_STATUS_OK;
 	}
@@ -818,12 +845,17 @@ VdpStatus rgba_render_surface(rgba_surface_t **dest,
 
 	rgba_prepare(tmp_rgba);
 	rgba_duplicate(tmp_rgba, *dest);
+//	rgba_duplicate_attribs(tmp_rgba, *dest);
+	rgba_clear(tmp_rgba);
 	rgba_do_render(tmp_rgba, &d_rect, src, &s_rect);
 	rgba_unref(device->cache, *dest_hdl);
 
 	rgba_ref(device->cache, tmp_hdl);
 	*dest_hdl = rgba_set_recently_rendered(device->cache, tmp_hdl, dest);
 	(*dest)->flags |= RGBA_FLAG_DIRTY | RGBA_FLAG_NEEDS_RENDER;
+	(*dest)->flags &= ~RGBA_FLAG_NEEDS_CLEAR;
+
+	dump_rgba(*dest);
 
 	return VDP_STATUS_OK;
 }
