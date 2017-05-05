@@ -34,6 +34,8 @@
 #include "cache.h"
 #endif
 
+//#define DUMP 1
+
 static void *presentation_thread(void *param);
 
 /* Helpers */
@@ -271,6 +273,11 @@ static VdpStatus do_presentation_queue_display(queue_ctx_t *q, task_t *task)
 	int xevents_flag = 0;
 	int init_display = task->start_disp;
 
+#ifdef DUMP
+	static int l;
+	FILE *fp;
+#endif
+
 	output_surface_ctx_t *os = task->surface;
 
 	uint32_t clip_width = task->clip_width;
@@ -319,6 +326,14 @@ static VdpStatus do_presentation_queue_display(queue_ctx_t *q, task_t *task)
 	{
 		rgba_flush(os->rgba);
 		q->target->disp->set_osd_layer(q->target->disp, q->target->x, q->target->y, clip_width, clip_height, os);
+#ifdef DUMP
+		char filename[sizeof("/srv/public/osd999.rgba")];
+		sprintf(filename, "/srv/public/osd%03d.rgba", l);
+		l++;
+		fp = fopen(filename, "w+");
+		fwrite(cedrus_mem_get_pointer(os->rgba->data), 4, os->rgba->width * os->rgba->height, fp);
+		fclose(fp);
+#endif
 		VDPAU_LOG(LDBG2, "Display OSD layer");
 	}
 	else
