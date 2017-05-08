@@ -138,6 +138,13 @@ typedef struct
 
 typedef struct
 {
+	uint32_t width;
+	uint32_t height;
+	VdpRGBAFormat format;
+} rgba_param_t;
+
+typedef struct
+{
 	device_ctx_t *device;
 	VdpRGBAFormat format;
 	uint32_t width, height;

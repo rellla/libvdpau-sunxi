@@ -22,7 +22,7 @@
 
 #include <pthread.h>
 
-//#define CACHE_DEBUG 1
+// #define CACHE_DEBUG
 
 typedef struct{
 	int refcount;
@@ -47,6 +47,6 @@ int cache_hdl_create(CACHE *cache, void *item_p);
 void cache_hdl_unref(int item_handle, CACHE *cache, void(*cleanup)(void *));
 void cache_hdl_ref(int item_handle, CACHE *cache);
 int cache_hdl_get_ref(int item_handle, CACHE *cache);
-int cache_hdl_get(CACHE *cache, void **item_p);
+int cache_hdl_get(CACHE *cache, void **item_p, int(*compare)(void *, void *), void *param);
 void cache_get_pointer(int item_handle, CACHE *cache, void **item_p);
 #endif

@@ -61,8 +61,11 @@ VdpStatus vdp_output_surface_create(VdpDevice device,
 	out->rgba = NULL;
 	out->rgba_handle = 0;
 
+	out->rgba_handle = rgba_create_surface(out->device, out->width, out->height, out->format, &out->rgba);
+//	rgba_ref(out->device->cache, out->rgba_handle);
+
 	pthread_mutex_init(&out->mutex, NULL);
-	VDPAU_LOG(LDBG, "Create OS width: %d, height: %d", width, height);
+	VDPAU_LOG(LDBG, "Create OS %d width: %d, height: %d", out->rgba_handle, out->width, out->height);
 	return handle_create(surface, out);
 }
 
@@ -132,8 +135,8 @@ VdpStatus vdp_output_surface_put_bits_native(VdpOutputSurface surface,
 		/* We have already linked an rgba surface in the bitmap surface,
 		 * check, how often it is linked:
 		 */
-		if (rgba_get_refcount(out->device->cache, out->rgba_handle) == 1) {
-			/* 1 time (it already got a put_bits_action, or we did a render action,
+		if (rgba_get_refcount(out->device->cache, out->rgba_handle) <= 2) {
+			/* <= 2 times (it already got a put_bits_action, or we did a render action,
 			 *         but it is not visible nor queued for displaying yet:
 			 *      - simply put the bits on it
 			 */
@@ -141,7 +144,7 @@ VdpStatus vdp_output_surface_put_bits_native(VdpOutputSurface surface,
 							   source_data, source_pitches, destination_rect,
 						           out->width, out->height, out->format);
 		} else {
-			/* >= 2 times (it already got a put_bits_action, AND it's possible,
+			/* >= 3 times (it already got a put_bits_action, AND it's possible,
 			 *             that it is visible or queued for displaying yet,
 			 *             so we must not touch that surface!
 			 *      - get a free rgba surface from the cache
@@ -197,8 +200,8 @@ VdpStatus vdp_output_surface_put_bits_indexed(VdpOutputSurface surface,
 		/* We have already linked an rgba surface in the bitmap surface,
 		 * check, how often it is linked:
 		 */
-		if (rgba_get_refcount(out->device->cache, out->rgba_handle) == 1) {
-			/* 1 time (it already got a put_bits_action, or we did a render action,
+		if (rgba_get_refcount(out->device->cache, out->rgba_handle) <= 2) {
+			/* <=2 times (it already got a put_bits_action, or we did a render action,
 			 *         but it is not visible nor queued for displaying yet:
 			 *      - simply put the bits on it
 			 */
@@ -207,7 +210,7 @@ VdpStatus vdp_output_surface_put_bits_indexed(VdpOutputSurface surface,
 							    destination_rect, color_table_format, color_table,
 							    out->width, out->height, out->format);
 		} else {
-			/* >= 2 times (it already got a put_bits_action, AND it's possible,
+			/* >= 3 times (it already got a put_bits_action, AND it's possible,
 			 *             that it is visible or queued for displaying yet,
 			 *             so we must not touch that surface!
 			 *      - get a free rgba surface from the cache

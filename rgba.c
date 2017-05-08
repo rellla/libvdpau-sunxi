@@ -138,6 +138,7 @@ static void rgba_blit(rgba_surface_t *dest, const VdpRect *dest_rect, rgba_surfa
 			dest->flags |= RGBA_FLAG_NEEDS_FLUSH;
 		}
 	}
+	VDPAU_LOG(LINFO, "blit");
 }
 
 void rgba_clear(rgba_surface_t *rgba)
@@ -207,20 +208,22 @@ static void rgba_duplicate(rgba_surface_t *dest, rgba_surface_t *src)
 	if ((src->dirty.x0 >= src->dirty.x1) || (src->dirty.y0 >= src->dirty.y1))
 		return;
 
+	rgba_blit(dest, &dest->dirty, src, &src->dirty);
+
 	/* copy full width dirty area */
-	if (src->dirty.x0 == 0 && src->dirty.x1 == src->width)
+/*	if (src->dirty.x0 == 0 && src->dirty.x1 == src->width)
 		memcpy(cedrus_mem_get_pointer(dest->data) + src->dirty.y0 * src->width * 4,
 		       cedrus_mem_get_pointer(src->data) + src->dirty.y0 * src->width * 4,
 		       (src->dirty.x1 - src->dirty.x0) * (src->dirty.y1 - src->dirty.y0) * 4);
 	else {
-	/* copy full dirty rect */
-		unsigned int y;
+*/	/* copy full dirty rect */
+/*		unsigned int y;
 		for (y = src->dirty.y0; y < src->dirty.y1; y ++)
 			memcpy(cedrus_mem_get_pointer(dest->data) + (y * src->width + src->dirty.x0) * 4,
 			       cedrus_mem_get_pointer(src->data)  + (y * src->width + src->dirty.x0) * 4,
 			       (src->dirty.x1 - src->dirty.x0) * 4);
 	}
-
+*/
 	rgba_duplicate_attribs(dest, src);
 
 	return;
@@ -318,7 +321,9 @@ void rgba_unref(CACHE *cache, int rgba_hdl)
 	rgba_surface_t *rgba;
 	rgba_get_pointer(cache, rgba_hdl, &rgba);
 
-	if (cache_hdl_get_ref(rgba_hdl, cache) == 1)
+//	VDPAU_LOG(LINFO, "rgba unref id %d, ref=%d", rgba_hdl, cache_hdl_get_ref(rgba_hdl, cache));
+
+	if (cache_hdl_get_ref(rgba_hdl, cache) <= 2)
 	{
 		rgba->flags |= RGBA_FLAG_NEEDS_CLEAR;
 		rgba_clear(rgba);
@@ -351,42 +356,84 @@ static int rgba_get_free_surface(device_ctx_t *device,
 {
 	int tmp_hdl;
 	rgba_surface_t *tmp_rgba = NULL;
+	cache_list(device->cache, rgba_print_value);
 
-	tmp_hdl = cache_hdl_get(device->cache, (void *)&tmp_rgba);
+	rgba_param_t rgba_param = {width, height, format};
+
+	tmp_hdl = cache_hdl_get(device->cache, (void *)&tmp_rgba, rgba_compare_params, &rgba_param);
 
 	if (!tmp_hdl)
 	{
-		tmp_rgba = (rgba_surface_t *)calloc(1, sizeof(rgba_surface_t));
-		rgba_create(tmp_rgba, device, width, height, format);
-		rgba_prepare(tmp_rgba);
-		tmp_hdl = rgba_hdl_create(device->cache, tmp_rgba);
-	}
-
-	if (tmp_hdl && ((tmp_rgba->width != width) || (tmp_rgba->height != height) || (tmp_rgba->format != format)))
-	{
-		rgba_unref(device->cache, tmp_hdl);
+		VDPAU_LOG(LINFO, "NO free surface with appropriate params (%d-%d)!", width, height);
+		tmp_hdl = cache_hdl_get(device->cache, (void *)&tmp_rgba, NULL, NULL);
+		if (tmp_hdl)
+		{
+			VDPAU_LOG(LINFO, "Got free surface %d with different params (%d-%d), so unref it!", tmp_hdl, tmp_rgba->width, tmp_rgba->height);
+			rgba_unref(device->cache, tmp_hdl);
+		}
 
 		tmp_rgba = (rgba_surface_t *)calloc(1, sizeof(rgba_surface_t));
 		rgba_create(tmp_rgba, device, width, height, format);
 		rgba_prepare(tmp_rgba);
 		tmp_hdl = rgba_hdl_create(device->cache, tmp_rgba);
 	}
+	else
+		VDPAU_LOG(LINFO, "Got free surface %d with right params (%d-%d) id %d!", tmp_hdl, width, height, tmp_rgba->id);
 
 	rgba_get_pointer(device->cache, tmp_hdl, rgba);
 
 	return tmp_hdl;
 }
 
-#ifdef CACHE_DEBUG
+int rgba_create_surface(device_ctx_t *device,
+                        uint32_t width,
+                        uint32_t height,
+                        VdpRGBAFormat format,
+                        rgba_surface_t **rgba)
+{
+	int tmp_hdl;
+	rgba_surface_t *tmp_rgba = NULL;
+
+	tmp_rgba = (rgba_surface_t *)calloc(1, sizeof(rgba_surface_t));
+	rgba_create(tmp_rgba, device, width, height, format);
+	rgba_prepare(tmp_rgba);
+	tmp_hdl = rgba_hdl_create(device->cache, tmp_rgba);
+
+	VDPAU_LOG(LINFO, "Create rgba surface %d (%d-%d)!", tmp_hdl, width, height);
+	cache_list(device->cache, rgba_print_value);
+
+	rgba_get_pointer(device->cache, tmp_hdl, rgba);
+
+	return tmp_hdl;
+}
+
 void rgba_print_value(void *rgba)
 {
-	printf(">>> ID %d DATA %x RGBA %x dirty? %d" ,
+#ifdef CACHE_DEBUG
+	printf(">>> ID %d DATA %x RGBA %x dirty? %d w%d|h%d" ,
 		((rgba_surface_t *)rgba)->id,
 		(unsigned int)((rgba_surface_t *)rgba)->data,
 		(unsigned int)((rgba_surface_t *)rgba),
-		(((rgba_surface_t *)rgba)->flags >> 0) & 1);
-}
+		(((rgba_surface_t *)rgba)->flags >> 0) & 1,
+		((rgba_surface_t *)rgba)->width,
+		((rgba_surface_t *)rgba)->height);
 #endif
+	return;
+}
+
+int rgba_compare_params(void *param, void *rgba)
+{
+	if (((rgba_param_t *)param)->width != ((rgba_surface_t *)rgba)->width)
+		return 1;
+
+	if (((rgba_param_t *)param)->height != ((rgba_surface_t *)rgba)->height)
+		return 1;
+
+	if (((rgba_param_t *)param)->format != ((rgba_surface_t *)rgba)->format)
+		return 1;
+
+	return 0;
+}
 
 /*
  * VDPAU API rgba helper functions
@@ -446,6 +493,7 @@ VdpStatus rgba_put_bits_native_new(device_ctx_t *device,
 	int tmp_handle;
 	rgba_surface_t *tmp_rgba;
 
+	VDPAU_LOG(LDBG, "Start PBN new");
 	tmp_handle = rgba_get_free_surface(device, width, height, format, &tmp_rgba);
 
 	rgba_prepare(tmp_rgba);
@@ -455,7 +503,8 @@ VdpStatus rgba_put_bits_native_new(device_ctx_t *device,
 	*rgba_handle = tmp_handle;
 	rgba_get_pointer(device->cache, tmp_handle, rgba);
 
-	VDPAU_LOG(LDBG, "PBN id: %d on a new surface (with ref=0)", (*rgba)->id + 1);
+	VDPAU_LOG(LDBG, "PBN id: %d on a new surface (with ref=0)", (*rgba)->id);
+	cache_list(device->cache, rgba_print_value);
 
 	return ret;
 }
@@ -475,18 +524,22 @@ VdpStatus rgba_put_bits_native_copy(device_ctx_t *device,
 	int tmp_handle;
 	rgba_surface_t *tmp_rgba;
 
+	VDPAU_LOG(LDBG, "Start PBN copy");
 	tmp_handle = rgba_get_free_surface(device, width, height, format, &tmp_rgba);
 
 	rgba_prepare(tmp_rgba);
+	VDPAU_LOG(LDBG, "PBN: DUPLICATE!!!!!");
 	rgba_duplicate(tmp_rgba, *rgba);
 	ret = rgba_put_bits_native(tmp_rgba, source_data, source_pitches, destination_rect);
-	rgba_unref(device->cache, *rgba_handle);
+	if (rgba_get_refcount(device->cache, tmp_handle) > 1)
+		rgba_unref(device->cache, *rgba_handle);
 
 	rgba_ref(device->cache, tmp_handle);
 	*rgba_handle = tmp_handle;
 	rgba_get_pointer(device->cache, tmp_handle, rgba);
 
-	VDPAU_LOG(LDBG, "PBN id: %d on a new surface and copy the old into it", (*rgba)->id + 1);
+	VDPAU_LOG(LDBG, "PBN id: %d on a new surface and copy the old into it", (*rgba)->id);
+	cache_list(device->cache, rgba_print_value);
 
 	return ret;
 }
@@ -506,6 +559,7 @@ VdpStatus rgba_put_bits_native_regular(rgba_surface_t **rgba,
 	int tmp_handle;
 	rgba_surface_t *tmp_rgba;
 
+	VDPAU_LOG(LDBG, "Start PBN regular");
 	if (((*rgba)->width != width) || ((*rgba)->height != height) || ((*rgba)->format != format))
 	{
 		tmp_handle = rgba_get_free_surface(device, width, height, format, &tmp_rgba);
@@ -521,7 +575,8 @@ VdpStatus rgba_put_bits_native_regular(rgba_surface_t **rgba,
 	else
 		ret = rgba_put_bits_native(*rgba, source_data, source_pitches, destination_rect);
 
-	VDPAU_LOG(LDBG, "PBI id: %d on a same surface (with ref=1)", (*rgba)->id + 1);
+	VDPAU_LOG(LDBG, "PBN id: %d on a same surface (with ref=1)", (*rgba)->id);
+	cache_list(device->cache, rgba_print_value);
 
 	return ret;
 }
@@ -606,6 +661,8 @@ VdpStatus rgba_put_bits_indexed_new(device_ctx_t *device,
 	int tmp_handle;
 	rgba_surface_t *tmp_rgba;
 
+	VDPAU_LOG(LDBG, "Start PBI new");
+
 	tmp_handle = rgba_get_free_surface(device, width, height, format, &tmp_rgba);
 
 	rgba_prepare(tmp_rgba);
@@ -616,7 +673,8 @@ VdpStatus rgba_put_bits_indexed_new(device_ctx_t *device,
 	*rgba_handle = tmp_handle;
 	rgba_get_pointer(device->cache, tmp_handle, rgba);
 
-	VDPAU_LOG(LDBG, "PBN id: %d on a new surface (with ref=0)", (*rgba)->id + 1);
+	VDPAU_LOG(LDBG, "PBN id: %d on a new surface (with ref=0)", (*rgba)->id);
+	cache_list(device->cache, rgba_print_value);
 
 	return ret;
 }
@@ -639,19 +697,23 @@ VdpStatus rgba_put_bits_indexed_copy(device_ctx_t *device,
 	int tmp_handle;
 	rgba_surface_t *tmp_rgba;
 
+	VDPAU_LOG(LDBG, "Start PBI copy");
 	tmp_handle = rgba_get_free_surface(device, width, height, format, &tmp_rgba);
 
 	rgba_prepare(tmp_rgba);
+	VDPAU_LOG(LDBG, "PBI: DUPLICATE!!!!!");
 	rgba_duplicate(tmp_rgba, *rgba);
 	ret = rgba_put_bits_indexed(tmp_rgba, source_indexed_format, source_data, source_pitch,
 			            destination_rect, color_table_format, color_table);
-	rgba_unref(device->cache, *rgba_handle);
+	if (rgba_get_refcount(device->cache, tmp_handle) > 1)
+		rgba_unref(device->cache, *rgba_handle);
 
 	rgba_ref(device->cache, tmp_handle);
 	*rgba_handle = tmp_handle;
 	rgba_get_pointer(device->cache, tmp_handle, rgba);
 
-	VDPAU_LOG(LDBG, "PBI id: %d on a new surface and copy the old into it", tmp_rgba->id + 1);
+	VDPAU_LOG(LDBG, "PBI id: %d on a new surface and copy the old into it", tmp_rgba->id);
+	cache_list(device->cache, rgba_print_value);
 
 	return ret;
 }
@@ -674,6 +736,7 @@ VdpStatus rgba_put_bits_indexed_regular(rgba_surface_t **rgba,
 	int tmp_handle;
 	rgba_surface_t *tmp_rgba;
 
+	VDPAU_LOG(LDBG, "Start PBI regular");
 	if (((*rgba)->width != width) || ((*rgba)->height != height) || ((*rgba)->format != format))
 	{
 		tmp_handle = rgba_get_free_surface(device, width, height, format, &tmp_rgba);
@@ -691,8 +754,8 @@ VdpStatus rgba_put_bits_indexed_regular(rgba_surface_t **rgba,
 		ret = rgba_put_bits_indexed(*rgba, source_indexed_format, source_data, source_pitch,
 					    destination_rect, color_table_format, color_table);
 
-	VDPAU_LOG(LDBG, "PBI id: %d on a same surface (with ref=1)", (*rgba)->id + 1);
-
+	VDPAU_LOG(LDBG, "PBI id: %d on a same surface (with ref=1)", (*rgba)->id);
+	cache_list(device->cache, rgba_print_value);
 
 	return ret;
 }
@@ -734,6 +797,8 @@ static VdpStatus rgba_do_render(rgba_surface_t *dest,
 
 	dirty_add_rect(&dest->dirty, d_rect);
 
+	cache_list(dest->device->cache, rgba_print_value);
+
 	return VDP_STATUS_OK;
 }
 
@@ -757,6 +822,7 @@ VdpStatus rgba_render_surface(rgba_surface_t **dest,
 	rgba_surface_t *tmp_rgba = NULL;
 	int tmp_hdl = 0;
 
+//	VDPAU_LOG(LDBG, "Start render surface");
 	/* We never rendered something into the dest surface,
 	   so just link and reference the source surface */
 	if ((*dest == NULL) || (dest_hdl == 0))
@@ -819,7 +885,7 @@ VdpStatus rgba_render_surface(rgba_surface_t **dest,
 	 */
 	if (!rgba_changed(tmp_rgba, src, &d_rect, &s_rect))
 	{
-		if (rgba_get_refcount(device->cache, *dest_hdl) > 0)
+		if (rgba_get_refcount(device->cache, *dest_hdl) > 1)
 			rgba_unref(device->cache, *dest_hdl);
 
 		*dest_hdl = rgba_set_recently_rendered(device->cache, tmp_hdl, dest);
@@ -827,6 +893,8 @@ VdpStatus rgba_render_surface(rgba_surface_t **dest,
 		(*dest)->flags |= RGBA_FLAG_DIRTY | RGBA_FLAG_NEEDS_RENDER;
 		(*dest)->flags &= ~RGBA_FLAG_NEEDS_CLEAR;
 
+		printf(".");
+		fflush (stdout);
 		return VDP_STATUS_OK;
 	}
 
@@ -840,15 +908,23 @@ VdpStatus rgba_render_surface(rgba_surface_t **dest,
 	 *    - append the new rgba to the surface and reference it
 	 *    - Note: (*dest != NULL && dest_hdl != 0)
 	 */
-	VDPAU_LOG(LDBG, "RBS: RGBA change -> new blit!");
+	VDPAU_LOG(LDBG, "RBS: RGBA change -> start new blit id%d!", src ? src->id : -1);
 	tmp_hdl = rgba_get_free_surface(device, width, height, format, &tmp_rgba);
 
 	rgba_prepare(tmp_rgba);
-	rgba_duplicate(tmp_rgba, *dest);
-//	rgba_duplicate_attribs(tmp_rgba, *dest);
+	if (!((*dest)->flags & RGBA_FLAG_NEEDS_CLEAR) && ((*dest)->flags & RGBA_FLAG_DIRTY))
+	{
+		rgba_duplicate(tmp_rgba, *dest);
+		if (!((*dest)->flags & RGBA_FLAG_NEEDS_CLEAR))
+			VDPAU_LOG(LINFO, "RenderSurface: Needs no clear!");
+		if ((*dest)->flags & RGBA_FLAG_DIRTY)
+			VDPAU_LOG(LINFO, "RenderSurface: Is dirty!");
+		VDPAU_LOG(LINFO, "RenderSurface: DUPLICATE!!!!");
+	}
 	rgba_clear(tmp_rgba);
 	rgba_do_render(tmp_rgba, &d_rect, src, &s_rect);
-	rgba_unref(device->cache, *dest_hdl);
+	if (rgba_get_refcount(device->cache, *dest_hdl) > 1)
+		rgba_unref(device->cache, *dest_hdl);
 
 	rgba_ref(device->cache, tmp_hdl);
 	*dest_hdl = rgba_set_recently_rendered(device->cache, tmp_hdl, dest);
@@ -856,6 +932,7 @@ VdpStatus rgba_render_surface(rgba_surface_t **dest,
 	(*dest)->flags &= ~RGBA_FLAG_NEEDS_CLEAR;
 
 	dump_rgba(*dest);
+	VDPAU_LOG(LDBG, "RBS: RGBA change -> new blit finished!");
 
 	return VDP_STATUS_OK;
 }

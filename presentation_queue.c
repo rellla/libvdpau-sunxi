@@ -312,7 +312,7 @@ static VdpStatus do_presentation_queue_display(queue_ctx_t *q, task_t *task)
 		return VDP_STATUS_OK;
 
 #ifdef CACHE_DEBUG
-	cache_list(os->device->cache, rgba_print_value);
+//	cache_list(os->device->cache, rgba_print_value);
 #endif
 
 	if (os->rgba_handle && (os->rgba->flags & RGBA_FLAG_DIRTY) && (os->rgba->flags & RGBA_FLAG_NEEDS_RENDER))
@@ -321,12 +321,12 @@ static VdpStatus do_presentation_queue_display(queue_ctx_t *q, task_t *task)
 		rgba_flush(os->rgba);
 		q->target->disp->set_osd_layer(q->target->disp, q->target->x, q->target->y, clip_width, clip_height, os);
 //		dump_rgba(os->rgba);
-		VDPAU_LOG(LDBG2, "Display OSD layer");
+//		VDPAU_LOG(LDBG2, "Display OSD layer");
 	}
 	else
 	{
 		q->target->disp->close_osd_layer(q->target->disp);
-		VDPAU_LOG(LDBG2, "Close OSD layer");
+//		VDPAU_LOG(LDBG2, "Close OSD layer");
 	}
 
 	return VDP_STATUS_OK;

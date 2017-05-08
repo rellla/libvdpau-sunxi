@@ -126,7 +126,7 @@ int cache_hdl_create(CACHE *cache, void *item_p)
 		cache->size = new_size;
 	}
 
-	data->refcount = 0;
+	data->refcount = 1;
 	data->itemdata = item_p;
 	cache->data[index] = data;
 
@@ -149,7 +149,7 @@ void cache_hdl_unref(int item_handle, CACHE *cache, void(*cleanup)(void *))
 
 	cache->data[item_handle - 1]->refcount--;
 
-	if (cache->data[item_handle - 1]->refcount < 0)
+	if (cache->data[item_handle - 1]->refcount < 1)
 	{
 		if (cache->data[item_handle - 1]->itemdata)
 		{
@@ -200,18 +200,23 @@ int cache_hdl_get_ref(int item_handle, CACHE *cache)
 	return refcount;
 }
 
-int cache_hdl_get(CACHE *cache, void **item_p)
+int cache_hdl_get(CACHE *cache, void **item_p, int(*compare_rgba)(void *, void *), void *param)
 {
 	int index;
 
 	pthread_mutex_lock(&cache->mutex);
 	for (index = 0; index < cache->size; index++)
-		if (cache->data[index] && (cache->data[index]->refcount == 0))
+	{
+		if (cache->data[index] && (cache->data[index]->refcount <= 1))
 		{
-			*item_p = cache->data[index]->itemdata;
-			pthread_mutex_unlock(&cache->mutex);
-			return index + 1;
+			if (!param || !compare_rgba(param, cache->data[index]->itemdata))
+			{
+				*item_p = cache->data[index]->itemdata;
+				pthread_mutex_unlock(&cache->mutex);
+				return index + 1;
+			}
 		}
+	}
 
 	pthread_mutex_unlock(&cache->mutex);
 	return 0;
@@ -219,6 +224,7 @@ int cache_hdl_get(CACHE *cache, void **item_p)
 
 void cache_list(CACHE *cache, void(*print_cb)(void *))
 {
+#ifdef CACHE_DEBUG
 	int index;
 	pthread_mutex_lock(&cache->mutex);
 	printf("\n");
@@ -233,4 +239,6 @@ void cache_list(CACHE *cache, void(*print_cb)(void *))
 		}
 	printf("\n");
 	pthread_mutex_unlock(&cache->mutex);
+#endif
+	return;
 }

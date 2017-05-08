@@ -35,6 +35,12 @@ void rgba_unref(CACHE *cache, int rgba_hdl);
 int rgba_get_refcount(CACHE *cache, int rgba_hdl);
 
 void rgba_print_value(void *itemdata);
+int rgba_compare_params(void *param, void *rgba);
+int rgba_create_surface(device_ctx_t *device,
+                        uint32_t width,
+                        uint32_t height,
+                        VdpRGBAFormat format,
+                        rgba_surface_t **rgba);
 
 /*
  * Rgba helper functions
