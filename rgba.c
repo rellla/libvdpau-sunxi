@@ -29,10 +29,12 @@
 
 //#define DUMP 1
 
+/* static counter */
+static uint32_t rgba_id = 0;
+
 /*
  * Rgba helper functions
  */
-
 void dump_rgba(rgba_surface_t *rgba)
 {
 #ifdef DUMP
@@ -209,21 +211,6 @@ static void rgba_duplicate(rgba_surface_t *dest, rgba_surface_t *src)
 		return;
 
 	rgba_blit(dest, &dest->dirty, src, &src->dirty);
-
-	/* copy full width dirty area */
-/*	if (src->dirty.x0 == 0 && src->dirty.x1 == src->width)
-		memcpy(cedrus_mem_get_pointer(dest->data) + src->dirty.y0 * src->width * 4,
-		       cedrus_mem_get_pointer(src->data) + src->dirty.y0 * src->width * 4,
-		       (src->dirty.x1 - src->dirty.x0) * (src->dirty.y1 - src->dirty.y0) * 4);
-	else {
-*/	/* copy full dirty rect */
-/*		unsigned int y;
-		for (y = src->dirty.y0; y < src->dirty.y1; y ++)
-			memcpy(cedrus_mem_get_pointer(dest->data) + (y * src->width + src->dirty.x0) * 4,
-			       cedrus_mem_get_pointer(src->data)  + (y * src->width + src->dirty.x0) * 4,
-			       (src->dirty.x1 - src->dirty.x0) * 4);
-	}
-*/
 	rgba_duplicate_attribs(dest, src);
 
 	return;
@@ -410,11 +397,13 @@ int rgba_create_surface(device_ctx_t *device,
 void rgba_print_value(void *rgba)
 {
 #ifdef CACHE_DEBUG
-	printf(">>> ID %d DATA %x RGBA %x dirty? %d w%d|h%d" ,
+	printf(">>> ID %d DATA %x RGBA %x dirty? %d needs render? %d needs clear? %d w%d|h%d" ,
 		((rgba_surface_t *)rgba)->id,
 		(unsigned int)((rgba_surface_t *)rgba)->data,
 		(unsigned int)((rgba_surface_t *)rgba),
 		(((rgba_surface_t *)rgba)->flags >> 0) & 1,
+		(((rgba_surface_t *)rgba)->flags >> 2) & 1,
+		(((rgba_surface_t *)rgba)->flags >> 3) & 1,
 		((rgba_surface_t *)rgba)->width,
 		((rgba_surface_t *)rgba)->height);
 #endif
@@ -473,7 +462,7 @@ static VdpStatus rgba_put_bits_native(rgba_surface_t *rgba,
 	rgba->flags |= RGBA_FLAG_DIRTY | RGBA_FLAG_NEEDS_FLUSH;
 	dirty_add_rect(&rgba->dirty, &d_rect);
 
-	rgba->id++;
+	rgba->id = ++rgba_id;
 
 	return VDP_STATUS_OK;
 }
@@ -638,7 +627,7 @@ static VdpStatus rgba_put_bits_indexed(rgba_surface_t *rgba,
 	rgba->flags |= RGBA_FLAG_DIRTY | RGBA_FLAG_NEEDS_FLUSH;
 	dirty_add_rect(&rgba->dirty, &d_rect);
 
-	rgba->id++;
+	rgba->id = ++rgba_id;
 
 	return VDP_STATUS_OK;
 }
@@ -779,7 +768,7 @@ static VdpStatus rgba_do_render(rgba_surface_t *dest,
 	else
 	{
 		rgba_blit(dest, d_rect, src, s_rect);
-		VDPAU_LOG(LDBG2, "Blit src ID = %d", src->id);
+		VDPAU_LOG(LDBG2, "Blit src ID = %d->%d, dirty rect: %d+%d|%d+%d", src->id, dest->id, s_rect->x0, s_rect->x1 - s_rect->x0, s_rect->y0, s_rect->y1 - s_rect->y0);
 
 		/* rotate ids and save the rect, to remember the blit */
 		src->old_id = dest->id;
@@ -914,12 +903,14 @@ VdpStatus rgba_render_surface(rgba_surface_t **dest,
 	rgba_prepare(tmp_rgba);
 	if (!((*dest)->flags & RGBA_FLAG_NEEDS_CLEAR) && ((*dest)->flags & RGBA_FLAG_DIRTY))
 	{
+		cache_list(device->cache, rgba_print_value);
 		rgba_duplicate(tmp_rgba, *dest);
 		if (!((*dest)->flags & RGBA_FLAG_NEEDS_CLEAR))
 			VDPAU_LOG(LINFO, "RenderSurface: Needs no clear!");
 		if ((*dest)->flags & RGBA_FLAG_DIRTY)
 			VDPAU_LOG(LINFO, "RenderSurface: Is dirty!");
 		VDPAU_LOG(LINFO, "RenderSurface: DUPLICATE!!!!");
+		cache_list(device->cache, rgba_print_value);
 	}
 	rgba_clear(tmp_rgba);
 	rgba_do_render(tmp_rgba, &d_rect, src, &s_rect);

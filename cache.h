@@ -22,7 +22,7 @@
 
 #include <pthread.h>
 
-// #define CACHE_DEBUG
+#define CACHE_DEBUG 1
 
 typedef struct{
 	int refcount;
