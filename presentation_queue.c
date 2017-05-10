@@ -314,19 +314,20 @@ static VdpStatus do_presentation_queue_display(queue_ctx_t *q, task_t *task)
 #ifdef CACHE_DEBUG
 //	cache_list(os->device->cache, rgba_print_value);
 #endif
-
 	if (os->rgba_handle && (os->rgba->flags & RGBA_FLAG_DIRTY) && (os->rgba->flags & RGBA_FLAG_NEEDS_RENDER))
 	{
 		rgba_clear(os->rgba);
 		rgba_flush(os->rgba);
 		q->target->disp->set_osd_layer(q->target->disp, q->target->x, q->target->y, clip_width, clip_height, os);
 		dump_rgba(os->rgba);
-//		VDPAU_LOG(LDBG2, "Display OSD layer");
+		VDPAU_LOG(LDBG2, "Display OSD layer");
+		cache_list(os->device->cache, rgba_print_value);
 	}
 	else
 	{
 		q->target->disp->close_osd_layer(q->target->disp);
-//		VDPAU_LOG(LDBG2, "Close OSD layer");
+		VDPAU_LOG(LDBG2, "Close OSD layer");
+		cache_list(os->device->cache, rgba_print_value);
 	}
 
 	return VDP_STATUS_OK;
@@ -395,6 +396,9 @@ static void *presentation_thread(void *param)
 				os_cur->vs->first_frame_flag = 0;
 			}
 
+			if (os_cur && os_cur->rgba_handle && (os_cur->rgba->flags & RGBA_FLAG_BLOCK))
+				os_cur->rgba->flags |= RGBA_FLAG_NEEDS_RENDER;
+
 			do_presentation_queue_display(q, task);
 
 			q->target->disp->wait_for_vsync(q->target->disp);
@@ -404,6 +408,7 @@ static void *presentation_thread(void *param)
 			{
 				os_cur->first_presentation_time = lastvsync;
 				os_cur->status = VDP_PRESENTATION_QUEUE_STATUS_VISIBLE;
+
 			}
 
 			if (os_prev)
@@ -419,10 +424,10 @@ static void *presentation_thread(void *param)
 					/* unreference the rgba, because it's invisible again
 					   and not expected to be displayed on this output surface anymore */
 					rgba_unref(os_prev->device->cache, os_prev->rgba_handle);
-					os_prev->rgba->flags &= ~RGBA_FLAG_NEEDS_RENDER;
-//					if (rgba_get_refcount(os_prev->device->cache, os_prev->rgba_handle) < 2)
-					os_prev->rgba->flags |= RGBA_FLAG_NEEDS_CLEAR;
-
+					if (!(os_prev->rgba->flags & RGBA_FLAG_BLOCK))
+						os_prev->rgba->flags &= ~RGBA_FLAG_NEEDS_RENDER;
+					else
+						os_prev->rgba->flags |= RGBA_FLAG_NEEDS_RENDER;
 				}
 
 				pthread_mutex_lock(&os_prev->mutex);

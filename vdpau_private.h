@@ -135,6 +135,7 @@ typedef struct
 #define RGBA_FLAG_NEEDS_FLUSH (1 << 1)
 #define RGBA_FLAG_NEEDS_RENDER (1 << 2)
 #define RGBA_FLAG_NEEDS_CLEAR (1 << 3)
+#define RGBA_FLAG_BLOCK (1 << 4)
 
 typedef struct
 {

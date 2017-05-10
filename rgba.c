@@ -326,6 +326,7 @@ void rgba_unref(CACHE *cache, int rgba_hdl)
 	if (cache_hdl_get_ref(rgba_hdl, cache) <= 2)
 	{
 		rgba->flags |= RGBA_FLAG_NEEDS_CLEAR;
+		rgba->flags &= ~RGBA_FLAG_BLOCK;
 		rgba_clear(rgba);
 	}
 
@@ -410,13 +411,14 @@ int rgba_create_surface(device_ctx_t *device,
 void rgba_print_value(void *rgba)
 {
 #ifdef CACHE_DEBUG
-	printf(">>> ID %d DATA %x RGBA %x dirty? %d needs render? %d needs clear? %d w%d|h%d" ,
+	printf(">>> ID %d DATA %x RGBA %x dirty? %d needs render? %d needs clear? %d block? %d w%d|h%d" ,
 		((rgba_surface_t *)rgba)->id,
 		(unsigned int)((rgba_surface_t *)rgba)->data,
 		(unsigned int)((rgba_surface_t *)rgba),
 		(((rgba_surface_t *)rgba)->flags >> 0) & 1,
 		(((rgba_surface_t *)rgba)->flags >> 2) & 1,
 		(((rgba_surface_t *)rgba)->flags >> 3) & 1,
+		(((rgba_surface_t *)rgba)->flags >> 4) & 1,
 		((rgba_surface_t *)rgba)->width,
 		((rgba_surface_t *)rgba)->height);
 #endif
@@ -890,12 +892,17 @@ VdpStatus rgba_render_surface(rgba_surface_t **dest,
 	if (!rgba_changed(tmp_rgba, src, &d_rect, &s_rect))
 	{
 		if (rgba_get_refcount(device->cache, *dest_hdl) > 1)
+		{
+			(*dest)->flags |= RGBA_FLAG_BLOCK;
+			(*dest)->flags |= RGBA_FLAG_DIRTY | RGBA_FLAG_NEEDS_RENDER;
 			rgba_unref(device->cache, *dest_hdl);
+		}
 
 		*dest_hdl = rgba_set_recently_rendered(device->cache, tmp_hdl, dest);
 		rgba_ref(device->cache, *dest_hdl);
 		(*dest)->flags |= RGBA_FLAG_DIRTY | RGBA_FLAG_NEEDS_RENDER;
 		(*dest)->flags &= ~RGBA_FLAG_NEEDS_CLEAR;
+		(*dest)->flags &= ~RGBA_FLAG_BLOCK;
 //		VDPAU_LOG(LINFO, "RenderSurface: No change tmp_rgba-src");
 
 //		printf(".");
@@ -930,12 +937,17 @@ VdpStatus rgba_render_surface(rgba_surface_t **dest,
 	rgba_clear(tmp_rgba);
 	rgba_do_render(tmp_rgba, &d_rect, src, &s_rect);
 	if (rgba_get_refcount(device->cache, *dest_hdl) > 1)
+	{
+		(*dest)->flags |= RGBA_FLAG_BLOCK;
+		(*dest)->flags |= RGBA_FLAG_DIRTY | RGBA_FLAG_NEEDS_RENDER;
 		rgba_unref(device->cache, *dest_hdl);
+	}
 
 	rgba_ref(device->cache, tmp_hdl);
 	*dest_hdl = rgba_set_recently_rendered(device->cache, tmp_hdl, dest);
 	(*dest)->flags |= RGBA_FLAG_DIRTY | RGBA_FLAG_NEEDS_RENDER;
 	(*dest)->flags &= ~RGBA_FLAG_NEEDS_CLEAR;
+	(*dest)->flags &= ~RGBA_FLAG_BLOCK;
 
 	cache_list(device->cache, rgba_print_value);
 	VDPAU_LOG(LDBG, "RBS: RGBA blit finished!");
