@@ -844,44 +844,6 @@ VdpStatus rgba_render_surface(rgba_surface_t **dest,
 	int tmp_hdl = 0;
 
 //	VDPAU_LOG(LDBG, "Start render surface");
-	/* We never rendered something into the dest surface,
-	   so just link and reference the source surface */
-	if ((*dest == NULL) || (dest_hdl == 0))
-	{
-		/* Set pointer to the src surface and reference it */
-		if (src_hdl != 0)
-		{
-			VDPAU_LOG(LDBG2, "RBS: no rgba surface yet, so just link and reference it");
-			*dest_hdl = rgba_set_recently_rendered(device->cache, src_hdl, dest);
-		}
-		/* We have not even a src surface, so
-		 *   - get a free surface
-		 *   - render to it with src=NULL,
-		 *     which makes a rgba_fill to the complete rect with all colors treated to 1.0
-		 *   - reference the new surface
-		 *   - set it as the last recently rendered one
-		 */
-		else
-		{
-			VDPAU_LOG(LDBG2, "RBS: render nothing on a new surface!!!");
-			tmp_hdl = rgba_get_free_surface(device, width, height, format, &tmp_rgba);
-			rgba_prepare(tmp_rgba);
-
-			VdpRect tmp_s_rect = {0, 0, 0, 0};
-			VdpRect tmp_d_rect = {0, 0, width, height};
-			rgba_do_render(tmp_rgba, &tmp_d_rect, src, &tmp_s_rect);
-
-			*dest_hdl = rgba_set_recently_rendered(device->cache, tmp_hdl, dest);
-		}
-
-//		rgba_ref(device->cache, *dest_hdl);
-		pthread_mutex_lock(&(*dest)->mutex);
-		(*dest)->flags |= RGBA_FLAG_DIRTY | RGBA_FLAG_NEEDS_RENDER;
-		(*dest)->flags &= ~RGBA_FLAG_NEEDS_CLEAR;
-		pthread_mutex_unlock(&(*dest)->mutex);
-
-		return VDP_STATUS_OK;
-	}
 
 	// set up source/destination rects using defaults where required
 	VdpRect s_rect = {0, 0, 0, 0};
