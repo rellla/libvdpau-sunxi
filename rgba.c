@@ -926,8 +926,8 @@ VdpStatus rgba_render_surface(rgba_surface_t **dest,
 		VDPAU_LOG(LINFO, "RBS: RGBA RenderSurface: DUPLICATE!!!! hdl %d->%d", *dest_hdl, tmp_hdl);
 	}
 	pthread_mutex_unlock(&(*dest)->mutex);
-	if (!((*dest)->flags & RGBA_FLAG_NEEDS_RENDER) && (rgba_get_refcount((*dest)->device->cache, *dest_hdl) > 1))
-		rgba_unref((*dest)->device->cache, *dest_hdl);
+//	if (!((*dest)->flags & RGBA_FLAG_NEEDS_RENDER) && (rgba_get_refcount((*dest)->device->cache, *dest_hdl) > 1))
+//		rgba_unref((*dest)->device->cache, *dest_hdl);
 
 	rgba_clear(tmp_rgba);
 	rgba_do_render(tmp_rgba, &d_rect, src, &s_rect);
@@ -935,7 +935,7 @@ VdpStatus rgba_render_surface(rgba_surface_t **dest,
 	{
 		pthread_mutex_lock(&(*dest)->mutex);
 		(*dest)->flags |= RGBA_FLAG_BLOCK;
-		(*dest)->flags |= RGBA_FLAG_DIRTY | RGBA_FLAG_NEEDS_RENDER;
+//		(*dest)->flags |= RGBA_FLAG_DIRTY | RGBA_FLAG_NEEDS_RENDER;
 		pthread_mutex_unlock(&(*dest)->mutex);
 //		rgba_unref(device->cache, *dest_hdl);
 	}
