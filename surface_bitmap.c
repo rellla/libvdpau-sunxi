@@ -121,7 +121,7 @@ VdpStatus vdp_bitmap_surface_put_bits_native(VdpBitmapSurface surface,
 		/* We have already linked an rgba surface in the bitmap surface,
 		 * check, how often it is linked:
 		 */
-		if (rgba_get_refcount(out->device->cache, out->rgba_handle) <= 2) {
+		if (rgba_get_refcount(out->device->cache, out->rgba_handle) < 2) {
 			/* <= 2 times (it already got a put_bits_action, or we did a render action,
 			 *         but it is not visible nor queued for displaying yet:
 			 *      - simply put the bits on it

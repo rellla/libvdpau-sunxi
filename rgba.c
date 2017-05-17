@@ -515,12 +515,12 @@ VdpStatus rgba_put_bits_native_new(device_ctx_t *device,
 	rgba_prepare(tmp_rgba);
 	ret = rgba_put_bits_native(tmp_rgba, source_data, source_pitches, destination_rect);
 
-	rgba_ref(device->cache, tmp_handle);
+//	rgba_ref(device->cache, tmp_handle);
 	*rgba_handle = tmp_handle;
 	rgba_get_pointer(device->cache, tmp_handle, rgba);
 
-	VDPAU_LOG(LDBG, "PBN id: %d on a new surface (with ref=0)", (*rgba)->id);
-//	cache_list(device->cache, rgba_print_value);
+	VDPAU_LOG(LDBG, "PBN id: %d on a new surface (with ref=0) ref %d", (*rgba)->id, rgba_get_refcount(device->cache, *rgba_handle));
+	cache_list(device->cache, rgba_print_value);
 
 	return ret;
 }
@@ -547,10 +547,12 @@ VdpStatus rgba_put_bits_native_copy(device_ctx_t *device,
 	VDPAU_LOG(LDBG, "PBN: DUPLICATE!!!!!");
 	rgba_duplicate(tmp_rgba, *rgba);
 	ret = rgba_put_bits_native(tmp_rgba, source_data, source_pitches, destination_rect);
-	if (rgba_get_refcount(device->cache, tmp_handle) > 1)
-		rgba_unref(device->cache, *rgba_handle);
+//	(*rgba)->flags |= RGBA_FLAG_NEEDS_CLEAR;
 
-	rgba_ref(device->cache, tmp_handle);
+//	if (rgba_get_refcount(device->cache, tmp_handle) > 1)
+//		rgba_unref(device->cache, *rgba_handle);
+
+//	rgba_ref(device->cache, tmp_handle);
 	*rgba_handle = tmp_handle;
 	rgba_get_pointer(device->cache, tmp_handle, rgba);
 
@@ -582,16 +584,19 @@ VdpStatus rgba_put_bits_native_regular(rgba_surface_t **rgba,
 
 		rgba_prepare(tmp_rgba);
 		ret = rgba_put_bits_native(tmp_rgba, source_data, source_pitches, destination_rect);
-		rgba_unref(device->cache, *rgba_handle);
+		(*rgba)->flags |= RGBA_FLAG_NEEDS_CLEAR;
+//		rgba_unref(device->cache, *rgba_handle);
 
-		rgba_ref(device->cache, tmp_handle);
+//		rgba_ref(device->cache, tmp_handle);
 		*rgba_handle = tmp_handle;
 		rgba_get_pointer(device->cache, tmp_handle, rgba);
+		VDPAU_LOG(LDBG, "PBN id: %d on a same(free) surface (with ref=1) ref %d", (*rgba)->id, rgba_get_refcount(device->cache, *rgba_handle));
 	}
 	else
+	{
 		ret = rgba_put_bits_native(*rgba, source_data, source_pitches, destination_rect);
-
-	VDPAU_LOG(LDBG, "PBN id: %d on a same surface (with ref=1)", (*rgba)->id);
+		VDPAU_LOG(LDBG, "PBN id: %d on a same surface (with ref=1) ref %d", (*rgba)->id, rgba_get_refcount(device->cache, *rgba_handle));
+	}
 //	cache_list(device->cache, rgba_print_value);
 
 	return ret;
@@ -688,7 +693,7 @@ VdpStatus rgba_put_bits_indexed_new(device_ctx_t *device,
 	ret = rgba_put_bits_indexed(tmp_rgba, source_indexed_format, source_data, source_pitch,
 				    destination_rect, color_table_format, color_table);
 
-	rgba_ref(device->cache, tmp_handle);
+//	rgba_ref(device->cache, tmp_handle);
 	*rgba_handle = tmp_handle;
 	rgba_get_pointer(device->cache, tmp_handle, rgba);
 
@@ -724,10 +729,10 @@ VdpStatus rgba_put_bits_indexed_copy(device_ctx_t *device,
 	rgba_duplicate(tmp_rgba, *rgba);
 	ret = rgba_put_bits_indexed(tmp_rgba, source_indexed_format, source_data, source_pitch,
 			            destination_rect, color_table_format, color_table);
-	if (rgba_get_refcount(device->cache, tmp_handle) > 1)
-		rgba_unref(device->cache, *rgba_handle);
+//	if (rgba_get_refcount(device->cache, tmp_handle) > 1)
+//		rgba_unref(device->cache, *rgba_handle);
 
-	rgba_ref(device->cache, tmp_handle);
+//	rgba_ref(device->cache, tmp_handle);
 	*rgba_handle = tmp_handle;
 	rgba_get_pointer(device->cache, tmp_handle, rgba);
 
@@ -763,9 +768,10 @@ VdpStatus rgba_put_bits_indexed_regular(rgba_surface_t **rgba,
 		rgba_prepare(tmp_rgba);
 		ret = rgba_put_bits_indexed(tmp_rgba, source_indexed_format, source_data, source_pitch,
 					    destination_rect, color_table_format, color_table);
-		rgba_unref(device->cache, *rgba_handle);
+		(*rgba)->flags |= RGBA_FLAG_NEEDS_CLEAR;
+//		rgba_unref(device->cache, *rgba_handle);
 
-		rgba_ref(device->cache, tmp_handle);
+//		rgba_ref(device->cache, tmp_handle);
 		*rgba_handle = tmp_handle;
 		rgba_get_pointer(device->cache, tmp_handle, rgba);
 	}
