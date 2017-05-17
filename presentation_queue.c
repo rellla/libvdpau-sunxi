@@ -240,9 +240,11 @@ VdpStatus vdp_presentation_queue_display(VdpPresentationQueue presentation_queue
 		return VDP_STATUS_INVALID_HANDLE;
 
 	/* reference the rgba, because it's expected to be displayed */
-	if (os->device->osd_enabled)
+	if (os->device->osd_enabled && os->rgba_handle && (os->rgba->flags & RGBA_FLAG_DIRTY) && (os->rgba->flags & RGBA_FLAG_NEEDS_RENDER))
+	{
+		VDPAU_LOG(LINFO, "Push os->rgba id %d, hdl %d, ref %d to queue and ref++", os->rgba->id, os->rgba_handle, rgba_get_refcount(os->device->cache, os->rgba_handle));
 		rgba_ref(os->device->cache, os->rgba_handle);
-
+	}
 	task_t *task = (task_t *)calloc(1, sizeof(task_t));
 	task->when = earliest_presentation_time;
 	task->clip_width = clip_width;
@@ -316,18 +318,19 @@ static VdpStatus do_presentation_queue_display(queue_ctx_t *q, task_t *task)
 #endif
 	if (os->rgba_handle && (os->rgba->flags & RGBA_FLAG_DIRTY) && (os->rgba->flags & RGBA_FLAG_NEEDS_RENDER))
 	{
+//		cache_list(os->device->cache, rgba_print_value);
 		rgba_clear(os->rgba);
 		rgba_flush(os->rgba);
 		q->target->disp->set_osd_layer(q->target->disp, q->target->x, q->target->y, clip_width, clip_height, os);
 		dump_rgba(os->rgba);
-		VDPAU_LOG(LDBG2, "Display OSD layer");
+		VDPAU_LOG(LDBG2, "Display OSD layer id %d, hdl %d, ref %d", os->rgba->id, os->rgba_handle, rgba_get_refcount(q->device->cache, os->rgba_handle));
 		cache_list(os->device->cache, rgba_print_value);
 	}
 	else
 	{
 		q->target->disp->close_osd_layer(q->target->disp);
 		VDPAU_LOG(LDBG2, "Close OSD layer");
-		cache_list(os->device->cache, rgba_print_value);
+//		cache_list(os->device->cache, rgba_print_value);
 	}
 
 	return VDP_STATUS_OK;
@@ -396,8 +399,16 @@ static void *presentation_thread(void *param)
 				os_cur->vs->first_frame_flag = 0;
 			}
 
-			if (os_cur && os_cur->rgba_handle && (os_cur->rgba->flags & RGBA_FLAG_BLOCK))
-				os_cur->rgba->flags |= RGBA_FLAG_NEEDS_RENDER;
+			if (os_cur && os_cur->rgba_handle)
+			{
+//				pthread_mutex_lock(&os_cur->rgba->mutex);
+//				if (os_cur->rgba->flags & RGBA_FLAG_BLOCK)
+//					os_cur->rgba->flags |= RGBA_FLAG_NEEDS_RENDER;
+//				pthread_mutex_unlock(&os_cur->rgba->mutex);
+//				if (os_cur->rgba->flags & RGBA_FLAG_NEEDS_RENDER)
+				if (rgba_get_refcount (os_cur->device->cache, os_cur->rgba_handle) > 1)
+					rgba_ref(os_cur->device->cache, os_cur->rgba_handle);
+			}
 
 			do_presentation_queue_display(q, task);
 
@@ -423,11 +434,18 @@ static void *presentation_thread(void *param)
 				{
 					/* unreference the rgba, because it's invisible again
 					   and not expected to be displayed on this output surface anymore */
-					rgba_unref(os_prev->device->cache, os_prev->rgba_handle);
-					if (!(os_prev->rgba->flags & RGBA_FLAG_BLOCK))
-						os_prev->rgba->flags &= ~RGBA_FLAG_NEEDS_RENDER;
-					else
+					if ((os_prev->rgba->flags & RGBA_FLAG_NEEDS_RENDER) || (os_prev->rgba->flags & RGBA_FLAG_BLOCK))
+						rgba_unref(os_prev->device->cache, os_prev->rgba_handle);
+					if (rgba_get_refcount(os_prev->device->cache, os_prev->rgba_handle) > 1)
+						rgba_unref(os_prev->device->cache, os_prev->rgba_handle);
+					pthread_mutex_lock(&os_prev->rgba->mutex);
+					os_prev->rgba->flags &= ~RGBA_FLAG_NEEDS_RENDER;
+					if (os_prev->rgba->flags & RGBA_FLAG_BLOCK)
+					{
 						os_prev->rgba->flags |= RGBA_FLAG_NEEDS_RENDER;
+						os_prev->rgba->flags &= ~RGBA_FLAG_BLOCK;
+					}
+					pthread_mutex_unlock(&os_prev->rgba->mutex);
 				}
 
 				pthread_mutex_lock(&os_prev->mutex);

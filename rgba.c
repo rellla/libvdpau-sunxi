@@ -50,7 +50,6 @@ void dump_rgba(rgba_surface_t *rgba)
 	return;
 }
 
-
 static VdpStatus rgba_create(rgba_surface_t *rgba,
                              device_ctx_t *device,
                              uint32_t width,
@@ -77,6 +76,7 @@ static VdpStatus rgba_create(rgba_surface_t *rgba,
 		rgba->id = 0;
 	}
 
+	pthread_mutex_init(&rgba->mutex, NULL);
 	return VDP_STATUS_OK;
 }
 
@@ -86,6 +86,8 @@ static void rgba_destroy(void *rgba_p)
 
 	if (!rgba || !rgba->device)
 		return;
+
+	pthread_mutex_destroy(&rgba->mutex);
 
 	if (rgba->device->osd_enabled && rgba->data)
 	{
@@ -151,10 +153,14 @@ void rgba_clear(rgba_surface_t *rgba)
 	if (!(rgba->flags & RGBA_FLAG_NEEDS_CLEAR))
 		return;
 
+	cache_list(rgba->device->cache, rgba_print_value);
 	rgba_fill(rgba, &rgba->dirty, 0x00000000);
+	pthread_mutex_lock(&rgba->mutex);
 	rgba->flags &= ~RGBA_FLAG_DIRTY;
 	rgba->flags &= ~RGBA_FLAG_NEEDS_CLEAR;
 	rgba->flags &= ~RGBA_FLAG_NEEDS_RENDER;
+	rgba->flags &= ~RGBA_FLAG_BLOCK;
+	pthread_mutex_unlock(&rgba->mutex);
 	rgba->dirty.x0 = rgba->width;
 	rgba->dirty.y0 = rgba->height;
 	rgba->dirty.x1 = 0;
@@ -325,8 +331,11 @@ void rgba_unref(CACHE *cache, int rgba_hdl)
 
 	if (cache_hdl_get_ref(rgba_hdl, cache) <= 2)
 	{
+		pthread_mutex_lock(&rgba->mutex);
 		rgba->flags |= RGBA_FLAG_NEEDS_CLEAR;
 		rgba->flags &= ~RGBA_FLAG_BLOCK;
+		rgba->flags &= ~RGBA_FLAG_NEEDS_RENDER;
+		pthread_mutex_unlock(&rgba->mutex);
 		rgba_clear(rgba);
 	}
 
@@ -474,7 +483,10 @@ static VdpStatus rgba_put_bits_native(rgba_surface_t *rgba,
 		}
 	}
 
-	rgba->flags |= RGBA_FLAG_DIRTY | RGBA_FLAG_NEEDS_FLUSH;
+	pthread_mutex_lock(&rgba->mutex);
+	rgba->flags |= RGBA_FLAG_DIRTY;
+	pthread_mutex_unlock(&rgba->mutex);
+	rgba->flags |= RGBA_FLAG_NEEDS_FLUSH;
 	dirty_add_rect(&rgba->dirty, &d_rect);
 
 	rgba->id = ++rgba_id;
@@ -639,7 +651,10 @@ static VdpStatus rgba_put_bits_indexed(rgba_surface_t *rgba,
 		dst_ptr += rgba->width;
 	}
 
-	rgba->flags |= RGBA_FLAG_DIRTY | RGBA_FLAG_NEEDS_FLUSH;
+	pthread_mutex_lock(&rgba->mutex);
+	rgba->flags |= RGBA_FLAG_DIRTY;
+	pthread_mutex_unlock(&rgba->mutex);
+	rgba->flags |= RGBA_FLAG_NEEDS_FLUSH;
 	dirty_add_rect(&rgba->dirty, &d_rect);
 
 	rgba->id = ++rgba_id;
@@ -859,9 +874,11 @@ VdpStatus rgba_render_surface(rgba_surface_t **dest,
 			*dest_hdl = rgba_set_recently_rendered(device->cache, tmp_hdl, dest);
 		}
 
-		rgba_ref(device->cache, *dest_hdl);
+//		rgba_ref(device->cache, *dest_hdl);
+		pthread_mutex_lock(&(*dest)->mutex);
 		(*dest)->flags |= RGBA_FLAG_DIRTY | RGBA_FLAG_NEEDS_RENDER;
 		(*dest)->flags &= ~RGBA_FLAG_NEEDS_CLEAR;
+		pthread_mutex_unlock(&(*dest)->mutex);
 
 		return VDP_STATUS_OK;
 	}
@@ -893,13 +910,16 @@ VdpStatus rgba_render_surface(rgba_surface_t **dest,
 	{
 		if (rgba_get_refcount(device->cache, *dest_hdl) > 1)
 		{
+			pthread_mutex_lock(&(*dest)->mutex);
 			(*dest)->flags |= RGBA_FLAG_BLOCK;
 			(*dest)->flags |= RGBA_FLAG_DIRTY | RGBA_FLAG_NEEDS_RENDER;
-			rgba_unref(device->cache, *dest_hdl);
+			pthread_mutex_unlock(&(*dest)->mutex);
+//			rgba_unref(device->cache, *dest_hdl);
 		}
 
 		*dest_hdl = rgba_set_recently_rendered(device->cache, tmp_hdl, dest);
-		rgba_ref(device->cache, *dest_hdl);
+//		rgba_ref(device->cache, *dest_hdl);
+		pthread_mutex_lock(&(*dest)->mutex);
 		(*dest)->flags |= RGBA_FLAG_DIRTY | RGBA_FLAG_NEEDS_RENDER;
 		(*dest)->flags &= ~RGBA_FLAG_NEEDS_CLEAR;
 		(*dest)->flags &= ~RGBA_FLAG_BLOCK;
@@ -907,6 +927,7 @@ VdpStatus rgba_render_surface(rgba_surface_t **dest,
 
 //		printf(".");
 //		fflush (stdout);
+		pthread_mutex_unlock(&(*dest)->mutex);
 		return VDP_STATUS_OK;
 	}
 
@@ -925,29 +946,39 @@ VdpStatus rgba_render_surface(rgba_surface_t **dest,
 
 	rgba_prepare(tmp_rgba);
 
+	pthread_mutex_lock(&tmp_rgba->mutex);
 	tmp_rgba->flags |= RGBA_FLAG_NEEDS_CLEAR | RGBA_FLAG_DIRTY;
+	pthread_mutex_unlock(&tmp_rgba->mutex);
 	rgba_clear(tmp_rgba);
 
+	pthread_mutex_lock(&(*dest)->mutex);
 	if (!((*dest)->flags & RGBA_FLAG_NEEDS_CLEAR) && ((*dest)->flags & RGBA_FLAG_DIRTY))
 	{
 		rgba_duplicate(tmp_rgba, *dest);
 		VDPAU_LOG(LINFO, "RBS: RGBA RenderSurface: DUPLICATE!!!! hdl %d->%d", *dest_hdl, tmp_hdl);
 	}
+	pthread_mutex_unlock(&(*dest)->mutex);
+	if (!((*dest)->flags & RGBA_FLAG_NEEDS_RENDER) && (rgba_get_refcount((*dest)->device->cache, *dest_hdl) > 1))
+		rgba_unref((*dest)->device->cache, *dest_hdl);
 
 	rgba_clear(tmp_rgba);
 	rgba_do_render(tmp_rgba, &d_rect, src, &s_rect);
 	if (rgba_get_refcount(device->cache, *dest_hdl) > 1)
 	{
+		pthread_mutex_lock(&(*dest)->mutex);
 		(*dest)->flags |= RGBA_FLAG_BLOCK;
 		(*dest)->flags |= RGBA_FLAG_DIRTY | RGBA_FLAG_NEEDS_RENDER;
-		rgba_unref(device->cache, *dest_hdl);
+		pthread_mutex_unlock(&(*dest)->mutex);
+//		rgba_unref(device->cache, *dest_hdl);
 	}
 
-	rgba_ref(device->cache, tmp_hdl);
+//	rgba_ref(device->cache, tmp_hdl);
 	*dest_hdl = rgba_set_recently_rendered(device->cache, tmp_hdl, dest);
+	pthread_mutex_lock(&(*dest)->mutex);
 	(*dest)->flags |= RGBA_FLAG_DIRTY | RGBA_FLAG_NEEDS_RENDER;
 	(*dest)->flags &= ~RGBA_FLAG_NEEDS_CLEAR;
 	(*dest)->flags &= ~RGBA_FLAG_BLOCK;
+	pthread_mutex_unlock(&(*dest)->mutex);
 
 	cache_list(device->cache, rgba_print_value);
 	VDPAU_LOG(LDBG, "RBS: RGBA blit finished!");

@@ -155,6 +155,7 @@ typedef struct
 	pixman_image_t *pimage;
 	int id, old_id;
 	VdpRect s_rect, d_rect;
+	pthread_mutex_t mutex;
 } rgba_surface_t;
 
 typedef struct output_surface_ctx_struct
