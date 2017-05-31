@@ -146,7 +146,7 @@ typedef struct
 
 typedef struct output_surface_ctx_struct
 {
-	rgba_surface_t rgba;
+	rgba_surface_t *rgba;
 	video_surface_ctx_t *vs;
 	yuv_data_t *yuv;
 	VdpRect video_src_rect, video_dst_rect;
@@ -164,7 +164,7 @@ typedef struct output_surface_ctx_struct
 
 typedef struct
 {
-	rgba_surface_t rgba;
+	rgba_surface_t *rgba;
 	VdpBool frequently_accessed;
 } bitmap_surface_ctx_t;
 

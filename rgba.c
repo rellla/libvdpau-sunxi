@@ -82,7 +82,7 @@ void rgba_destroy(rgba_surface_t *rgba)
 
 	if (rgba->device->osd_enabled)
 	{
-		if(!rgba->device->g2d_enabled)
+		if (!rgba->device->g2d_enabled)
 			vdp_pixman_unref(rgba);
 
 		cedrus_mem_free(rgba->data);
