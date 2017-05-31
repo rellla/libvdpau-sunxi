@@ -402,6 +402,8 @@ static void *presentation_thread(void *param)
 				pthread_mutex_lock(&os_prev->mutex);
 				if (os_prev->status != VDP_PRESENTATION_QUEUE_STATUS_IDLE)
 				{
+					if (os_prev->device->osd_enabled && (os_prev->rgba->flags & RGBA_FLAG_DIRTY))
+						os_prev->rgba->flags |= RGBA_FLAG_NEEDS_CLEAR;
 					os_prev->status = VDP_PRESENTATION_QUEUE_STATUS_IDLE;
 					pthread_cond_signal(&os_prev->cond);
 				}

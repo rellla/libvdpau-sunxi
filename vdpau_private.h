@@ -135,6 +135,13 @@ typedef struct
 
 typedef struct
 {
+	VdpRect s_rect;
+	VdpRect d_rect;
+	int id;
+} rgba_render_params_t;
+
+typedef struct
+{
 	device_ctx_t *device;
 	VdpRGBAFormat format;
 	uint32_t width, height;
@@ -142,11 +149,14 @@ typedef struct
 	VdpRect dirty;
 	uint32_t flags;
 	pixman_image_t *pimage;
+	uint32_t id;
+	rgba_render_params_t last_render;
 } rgba_surface_t;
 
 typedef struct output_surface_ctx_struct
 {
 	rgba_surface_t *rgba;
+	device_ctx_t *device;
 	video_surface_ctx_t *vs;
 	yuv_data_t *yuv;
 	VdpRect video_src_rect, video_dst_rect;
@@ -165,6 +175,7 @@ typedef struct output_surface_ctx_struct
 typedef struct
 {
 	rgba_surface_t *rgba;
+	device_ctx_t *device;
 	VdpBool frequently_accessed;
 } bitmap_surface_ctx_t;
 

@@ -31,6 +31,7 @@ static void cleanup_output_surface(void *ptr, void *meta)
 		yuv_unref(surface->yuv);
 
 	sfree(surface->vs);
+	sfree(surface->device);
 }
 
 VdpStatus vdp_output_surface_create(VdpDevice device,
@@ -54,6 +55,7 @@ VdpStatus vdp_output_surface_create(VdpDevice device,
 
 	out->contrast = 1.0;
 	out->saturation = 1.0;
+	out->device = sref(dev);
 
 	out->rgba = (rgba_surface_t *)calloc(1, sizeof(rgba_surface_t));
 
@@ -106,6 +108,9 @@ VdpStatus vdp_output_surface_put_bits_native(VdpOutputSurface surface,
 	if (!out)
 		return VDP_STATUS_INVALID_HANDLE;
 
+	if (!out->device->osd_enabled)
+		return VDP_STATUS_OK;
+
 	return rgba_put_bits_native(out->rgba, source_data, source_pitches, destination_rect);
 }
 
@@ -120,6 +125,9 @@ VdpStatus vdp_output_surface_put_bits_indexed(VdpOutputSurface surface,
 	smart output_surface_ctx_t *out = handle_get(surface);
 	if (!out)
 		return VDP_STATUS_INVALID_HANDLE;
+
+	if (!out->device->osd_enabled)
+		return VDP_STATUS_OK;
 
 	return rgba_put_bits_indexed(out->rgba, source_indexed_format, source_data, source_pitch,
 				     destination_rect, color_table_format, color_table);
@@ -136,6 +144,9 @@ VdpStatus vdp_output_surface_put_bits_y_cb_cr(VdpOutputSurface surface,
 	if (!out)
 		return VDP_STATUS_INVALID_HANDLE;
 
+	if (!out->device->osd_enabled)
+		return VDP_STATUS_OK;
+
 	return VDP_STATUS_ERROR;
 }
 
@@ -150,6 +161,9 @@ VdpStatus vdp_output_surface_render_output_surface(VdpOutputSurface destination_
 	smart output_surface_ctx_t *out = handle_get(destination_surface);
 	if (!out)
 		return VDP_STATUS_INVALID_HANDLE;
+
+	if (!out->device->osd_enabled)
+		return VDP_STATUS_OK;
 
 	smart output_surface_ctx_t *in = handle_get(source_surface);
 
@@ -168,6 +182,9 @@ VdpStatus vdp_output_surface_render_bitmap_surface(VdpOutputSurface destination_
 	smart output_surface_ctx_t *out = handle_get(destination_surface);
 	if (!out)
 		return VDP_STATUS_INVALID_HANDLE;
+
+	if (!out->device->osd_enabled)
+		return VDP_STATUS_OK;
 
 	smart bitmap_surface_ctx_t *in = handle_get(source_surface);
 
