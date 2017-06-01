@@ -45,6 +45,7 @@ int check_for_xevents(task_t *task)
 		case UnmapNotify:
 			ret_flags &= ~(XEVENTS_DRAWABLE_CHANGE | XEVENTS_REINIT);
 			ret_flags |= XEVENTS_DRAWABLE_UNMAP;
+			q->target->unmapped = 1;
 			break;
 		/*
 		 * Window was mapped.
@@ -53,6 +54,7 @@ int check_for_xevents(task_t *task)
 		case MapNotify:
 			ret_flags |= (XEVENTS_REINIT | XEVENTS_DRAWABLE_CHANGE);
 			ret_flags &= ~XEVENTS_DRAWABLE_UNMAP;
+			q->target->unmapped = 0;
 			break;
 		/*
 		 * Window dimension or position has changed.

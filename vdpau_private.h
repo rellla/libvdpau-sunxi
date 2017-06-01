@@ -105,6 +105,7 @@ typedef struct
 	int drawable_y;
 	int drawable_width;
 	int drawable_height;
+	int unmapped;
 } queue_target_ctx_t;
 
 typedef struct

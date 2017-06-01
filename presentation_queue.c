@@ -104,6 +104,7 @@ VdpStatus vdp_presentation_queue_target_create_x11(VdpDevice device,
 	qt->drawable_y = 0;
 	qt->drawable_width = 0;
 	qt->drawable_height = 0;
+	qt->unmapped = 0;
 
 	qt->drawable = drawable;
 	XSelectInput(dev->display, drawable, StructureNotifyMask);
@@ -271,11 +272,12 @@ static VdpStatus do_presentation_queue_display(queue_ctx_t *q, task_t *task)
 	/* Check for XEvents */
 	xevents_flag = check_for_xevents(task);
 
-	if (xevents_flag & XEVENTS_DRAWABLE_UNMAP) /* Window is unmapped, close both layers */
+	if (xevents_flag & XEVENTS_DRAWABLE_UNMAP || q->target->unmapped == 1) /* Window is unmapped, close both layers */
 	{
 		q->target->disp->close_video_layer(q->target->disp);
 		if (q->device->osd_enabled)
 			q->target->disp->close_osd_layer(q->target->disp);
+
 		return VDP_STATUS_OK;
 	}
 
