@@ -34,6 +34,7 @@ static void cleanup_device(void *ptr, void *meta)
 		close(device->g2d_fd);
 	cedrus_close(device->cedrus);
 	XCloseDisplay(device->display);
+	device->disp->close(device->disp);
 	VDPAU_LOG(LINFO, "libvdpau-sunxi closed.");
 }
 

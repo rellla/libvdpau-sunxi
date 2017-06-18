@@ -47,8 +47,6 @@ static void cleanup_presentation_queue_target(void *ptr, void *meta)
 {
 	queue_target_ctx_t *target = ptr;
 	sfree(target->device);
-
-	target->disp->close(target->disp);
 }
 
 static int rect_changed(VdpRect rect1, VdpRect rect2)
