@@ -249,8 +249,18 @@ VdpStatus vdp_video_mixer_get_feature_support(VdpVideoMixer mixer,
 	if (!mix)
 		return VDP_STATUS_INVALID_HANDLE;
 
+	int i;
 
-	return VDP_STATUS_ERROR;
+	for (i = 0; i < feature_count; i++) {
+		switch (features[i])
+		{
+			case VDP_VIDEO_MIXER_FEATURE_DEINTERLACE_TEMPORAL:
+				feature_supports[i] = mix->device->disp->deint_enabled;
+				break;
+		}
+	}
+
+	return VDP_STATUS_OK;
 }
 
 VdpStatus vdp_video_mixer_set_feature_enables(VdpVideoMixer mixer,
